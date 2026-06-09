@@ -5,8 +5,8 @@ from pathlib import Path
 from typing import List, Tuple
 
 from app.core.config import settings
-from app.models.schemas import DocumentChunk
-from app.services.ollama_service import ollama_service
+from schemas.schemas import DocumentChunk
+from services.ollama_service import ollama_service
 
 
 # ── Simple vector store (pure Python, no deps) ───────────────────────────────

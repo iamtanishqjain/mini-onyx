@@ -2,9 +2,9 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 import json
 
-from app.models.schemas import ChatRequest, ChatResponse
-from app.services.ollama_service import ollama_service
-from app.services.rag_service import rag_service
+from schemas.schemas import ChatRequest, ChatResponse
+from services.ollama_service import ollama_service
+from services.rag_service import rag_service
 from app.core.config import settings
 
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -23,7 +23,7 @@ DEFAULT_SYSTEM_PROMPT = "You are a helpful AI assistant. Be concise, accurate, a
 @router.post("/stream")
 async def chat_stream(request: ChatRequest):
     """
-    Streaming chat endpoint. 
+    Streaming chat endpoint.
     Set use_rag=true and provide collection_name to enable RAG.
     Returns Server-Sent Events (text/event-stream).
     """

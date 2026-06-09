@@ -1,6 +1,6 @@
 from fastapi import APIRouter
-from app.models.schemas import HealthResponse
-from app.services.ollama_service import ollama_service
+from schemas.schemas import HealthResponse
+from services.ollama_service import ollama_service
 from app.core.config import settings
 
 router = APIRouter(tags=["health"])

@@ -1,14 +1,14 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Form
 from typing import Optional
 
-from app.models.schemas import (
+from schemas.schemas import (
     IngestResponse,
     QueryRequest,
     QueryResponse,
     CollectionsResponse,
     CollectionInfo,
 )
-from app.services.rag_service import rag_service
+from services.rag_service import rag_service
 
 router = APIRouter(prefix="/rag", tags=["rag"])
 
