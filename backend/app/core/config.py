@@ -1,9 +1,11 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
 import json
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=False)
+
     # Ollama
     ollama_base_url: str = "http://localhost:11434"
     ollama_chat_model: str = "llama3"
@@ -25,10 +27,6 @@ class Settings(BaseSettings):
     @property
     def cors_origins_list(self) -> List[str]:
         return json.loads(self.cors_origins)
-
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
 
 
 settings = Settings()
