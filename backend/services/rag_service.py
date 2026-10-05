@@ -93,7 +93,10 @@ def split_text(text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]
         chunk = text[start:end].strip()
         if chunk:
             chunks.append(chunk)
-        start = end - overlap
+        # A separator close to the window start makes `end` small, so stepping
+        # back by `overlap` would move `start` backwards (even negative) and skip
+        # the text in between. Only overlap when it still moves forward.
+        start = end - overlap if end - overlap > start else end
     return chunks
 
 
