@@ -8,6 +8,7 @@ A self-hosted AI platform for document-aware conversations using local LLMs. Bui
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://typescriptlang.org)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)](https://docker.com)
 [![License](https://img.shields.io/badge/License-MIT-22c55e?style=flat-square)](LICENSE)
+[![Backend Tests](https://github.com/iamtanishqjain/mini-onyx/actions/workflows/backend-tests.yml/badge.svg)](https://github.com/iamtanishqjain/mini-onyx/actions/workflows/backend-tests.yml)
 
 ---
 
@@ -230,6 +231,18 @@ CHUNK_SIZE=500
 CHUNK_OVERLAP=50
 RAG_TOP_K=5
 ```
+
+---
+
+## Tests
+
+```bash
+cd backend
+pip install -r requirements-dev.txt
+pytest
+```
+
+The suite covers document chunking, collection-name handling, system prompt selection, upload validation and the health endpoint. It runs on every push and pull request against Python 3.10 and 3.12.
 
 ---
 
