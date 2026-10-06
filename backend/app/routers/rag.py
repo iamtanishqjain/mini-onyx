@@ -22,7 +22,7 @@ async def ingest_document(
 ):
     """
     Upload a document (PDF, DOCX, TXT, MD).
-    It gets parsed, chunked, embedded via Ollama, and stored in ChromaDB.
+    It gets parsed, chunked, embedded via Ollama, and stored in the vector store.
     """
     filename = file.filename or "unknown"
     ext = "." + filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
@@ -76,7 +76,7 @@ async def query_documents(request: QueryRequest):
 
 @router.get("/collections", response_model=CollectionsResponse)
 async def list_collections():
-    """List all ChromaDB collections with document counts."""
+    """List all collections with document counts."""
     try:
         collections = rag_service.list_collections()
         return CollectionsResponse(

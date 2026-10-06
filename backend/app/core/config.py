@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     ollama_chat_model: str = "llama3"
     ollama_embed_model: str = "nomic-embed-text"
 
-    # ChromaDB
+    # Vector store
     chroma_persist_dir: str = "./chroma_db"
 
     # App
