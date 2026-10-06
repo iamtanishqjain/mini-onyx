@@ -20,17 +20,16 @@ If the context doesn't contain enough information to answer, say so clearly and 
 DEFAULT_SYSTEM_PROMPT = "You are a helpful AI assistant. Be concise, accurate, and friendly."
 
 
-@router.post("/stream")
-async def chat_stream(request: ChatRequest):
-    """
-    Streaming chat endpoint.
-    Set use_rag=true and provide collection_name to enable RAG.
-    Returns Server-Sent Events (text/event-stream).
+async def prepare_messages(request: ChatRequest):
+    """Build the messages sent to the model, plus the RAG sources used.
+
+    A system message supplied by the caller is kept, unless RAG found context,
+    in which case the grounding prompt has to take its place.
     """
     messages = [{"role": m.role.value, "content": m.content} for m in request.messages]
+    caller_system = messages[0]["content"] if messages and messages[0]["role"] == "system" else None
 
-    # ── RAG context injection ─────────────────────────────────────────────
-    source_chunks = []
+    context, source_chunks = "", []
     if request.use_rag and request.collection_name:
         user_query = next(
             (m["content"] for m in reversed(messages) if m["role"] == "user"),
@@ -42,20 +41,29 @@ async def chat_stream(request: ChatRequest):
                 collection_name=request.collection_name,
                 top_k=settings.rag_top_k,
             )
-            if context:
-                system_content = RAG_SYSTEM_PROMPT.format(context=context)
-            else:
-                system_content = DEFAULT_SYSTEM_PROMPT
-        else:
-            system_content = DEFAULT_SYSTEM_PROMPT
-    else:
-        system_content = DEFAULT_SYSTEM_PROMPT
 
-    # Prepend system message (or replace existing one)
-    if messages and messages[0]["role"] == "system":
+    system_content = (
+        RAG_SYSTEM_PROMPT.format(context=context)
+        if context
+        else caller_system or DEFAULT_SYSTEM_PROMPT
+    )
+
+    if caller_system is not None:
         messages[0]["content"] = system_content
     else:
         messages.insert(0, {"role": "system", "content": system_content})
+
+    return messages, source_chunks
+
+
+@router.post("/stream")
+async def chat_stream(request: ChatRequest):
+    """
+    Streaming chat endpoint.
+    Set use_rag=true and provide collection_name to enable RAG.
+    Returns Server-Sent Events (text/event-stream).
+    """
+    messages, source_chunks = await prepare_messages(request)
 
     # ── Stream ────────────────────────────────────────────────────────────
     async def event_generator():
@@ -106,28 +114,7 @@ async def chat(request: ChatRequest):
     Non-streaming chat (returns full response at once).
     Good for testing via Swagger UI.
     """
-    messages = [{"role": m.role.value, "content": m.content} for m in request.messages]
-
-    if request.use_rag and request.collection_name:
-        user_query = next(
-            (m["content"] for m in reversed(messages) if m["role"] == "user"), ""
-        )
-        if user_query:
-            context, _ = await rag_service.build_context(
-                query_text=user_query,
-                collection_name=request.collection_name,
-                top_k=settings.rag_top_k,
-            )
-            system_content = RAG_SYSTEM_PROMPT.format(context=context) if context else DEFAULT_SYSTEM_PROMPT
-        else:
-            system_content = DEFAULT_SYSTEM_PROMPT
-    else:
-        system_content = DEFAULT_SYSTEM_PROMPT
-
-    if messages and messages[0]["role"] == "system":
-        messages[0]["content"] = system_content
-    else:
-        messages.insert(0, {"role": "system", "content": system_content})
+    messages, _ = await prepare_messages(request)
 
     try:
         content = await ollama_service.chat(messages=messages, model=request.model)
