@@ -128,11 +128,23 @@ def parse_file(filename: str, file_bytes: bytes) -> str:
 
 # ── RAG Service ───────────────────────────────────────────────────────────────
 
+def sanitize_collection_name(name: str) -> str:
+    """Collection names become file names, so keep them to safe characters.
+
+    Applied on every path into the store. Sanitizing only on ingest meant a
+    collection stored as "my_docs" could never be queried or deleted by the
+    "my docs" the caller originally sent.
+    """
+    safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in name)
+    return safe[:63] or "default"
+
+
 class RAGService:
     def __init__(self):
         self.store = SimpleVectorStore(settings.chroma_persist_dir)
 
     async def ingest_document(self, filename, file_bytes, collection_name) -> Tuple[str, int]:
+        collection_name = sanitize_collection_name(collection_name)
         raw_text = parse_file(filename, file_bytes)
         if not raw_text.strip():
             raise ValueError("Could not extract text from document.")
@@ -148,6 +160,7 @@ class RAGService:
         return collection_name, len(chunks)
 
     async def query(self, query_text, collection_name, top_k=5) -> List[DocumentChunk]:
+        collection_name = sanitize_collection_name(collection_name)
         query_emb = await ollama_service.embed(query_text)
         results = self.store.query(collection_name, query_emb, top_k)
         return [
@@ -172,7 +185,7 @@ class RAGService:
         return self.store.list_collections()
 
     def delete_collection(self, name):
-        return self.store.delete_collection(name)
+        return self.store.delete_collection(sanitize_collection_name(name))
 
 
 rag_service = RAGService()

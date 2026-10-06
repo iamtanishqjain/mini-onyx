@@ -37,15 +37,11 @@ async def ingest_document(
     if not file_bytes:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
-    # Sanitize collection name (ChromaDB rules)
-    safe_collection = "".join(c if c.isalnum() or c in "-_" else "_" for c in collection_name)
-    safe_collection = safe_collection[:63] or "default"
-
     try:
         col_name, chunks_added = await rag_service.ingest_document(
             filename=filename,
             file_bytes=file_bytes,
-            collection_name=safe_collection,
+            collection_name=collection_name,
         )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
