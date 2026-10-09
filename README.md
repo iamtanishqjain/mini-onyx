@@ -4,8 +4,6 @@ A self-hosted AI platform for document-aware conversations using local LLMs. Bui
 
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![Next.js](https://img.shields.io/badge/Next.js-14-black?style=flat-square&logo=next.js&logoColor=white)](https://nextjs.org)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://typescriptlang.org)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)](https://docker.com)
 [![License](https://img.shields.io/badge/License-MIT-22c55e?style=flat-square)](LICENSE)
 [![Backend Tests](https://github.com/iamtanishqjain/mini-onyx/actions/workflows/backend-tests.yml/badge.svg)](https://github.com/iamtanishqjain/mini-onyx/actions/workflows/backend-tests.yml)
@@ -63,10 +61,10 @@ The project is inspired by [Onyx](https://github.com/onyx-dot-app/onyx) and buil
 ```
 
 **Design decisions:**
-- LLM and embedding logic are split into separate services (`services/llm/` and `services/embeddings/`) to keep concerns isolated and allow swapping providers independently
+- Ollama access is wrapped in a single service (`services/ollama_service.py`) so chat, streaming and embeddings share one client and provider swaps touch one file
 - Vector store is implemented in pure Python (cosine similarity over JSON) — no C++ compilation required, making it portable across environments
-- All system prompts are centralized in `app/core/prompts.py` so behavior can be changed without touching routing logic
-- Streaming uses SSE over a single HTTP connection; the frontend handles `sources`, `token`, `done`, and `error` event types
+- System prompts live beside the chat routes, and a prompt supplied by the caller is preserved unless RAG has context to inject
+- Streaming uses SSE over a single HTTP connection, emitting `sources`, `token`, `done` and `error` event types
 
 ---
 
@@ -74,7 +72,7 @@ The project is inspired by [Onyx](https://github.com/onyx-dot-app/onyx) and buil
 
 | Layer | Technology | Purpose |
 |---|---|---|
-| Frontend | Next.js 14, TypeScript, Tailwind CSS | Chat UI, streaming rendering, RAG controls |
+| Frontend | Next.js 14, TypeScript, Tailwind CSS | Planned, not in this repository yet |
 | Backend | Python 3.11, FastAPI | Async API, SSE streaming, request routing |
 | LLM | Ollama (llama3, mistral, phi3) | Local inference, no external API |
 | Embeddings | nomic-embed-text via Ollama | Semantic vector generation |
@@ -88,45 +86,30 @@ The project is inspired by [Onyx](https://github.com/onyx-dot-app/onyx) and buil
 
 ```
 mini-onyx/
-├── docker-compose.yml
+├── docker-compose.yml           # Ollama + backend
+├── docker/
+│   └── backend.Dockerfile
 │
-├── backend/
-│   ├── app/
-│   │   ├── main.py                  # App factory, router registration
-│   │   ├── core/
-│   │   │   ├── config.py            # Pydantic settings from .env
-│   │   │   └── prompts.py           # Centralized LLM system prompts
-│   │   └── routers/
-│   │       ├── chat.py              # POST /chat/stream  POST /chat/
-│   │       ├── rag.py               # POST /rag/ingest   GET /rag/collections
-│   │       ├── models.py            # GET /models/
-│   │       └── health.py            # GET /health
-│   ├── schemas/
-│   │   └── schemas.py               # Pydantic request/response models
-│   ├── services/
-│   │   ├── llm/
-│   │   │   └── ollama_chat.py       # Chat completion, streaming, model listing
-│   │   ├── embeddings/
-│   │   │   └── ollama_embed.py      # Text embedding, batch embedding
-│   │   └── rag_service.py           # Chunking, ingestion, retrieval pipeline
-│   ├── requirements.txt
-│   └── .env.example
-│
-├── frontend/
-│   ├── app/
-│   │   ├── page.tsx                 # Root page, state management
-│   │   ├── globals.css              # CSS variables, design tokens
-│   │   ├── lib/api.ts               # Typed API client
-│   │   └── components/
-│   │       ├── Sidebar.tsx          # Model switcher, file upload, collections
-│   │       ├── ChatWindow.tsx       # Message rendering, source citations
-│   │       └── ChatInput.tsx        # Controlled textarea, send handler
-│   └── package.json
-│
-└── docker/
-    ├── backend.Dockerfile
-    └── frontend.Dockerfile
+└── backend/
+    ├── app/
+    │   ├── main.py              # App setup, router registration
+    │   ├── core/config.py       # Pydantic settings from .env
+    │   └── routers/
+    │       ├── chat.py          # POST /chat/stream  POST /chat/
+    │       ├── rag.py           # POST /rag/ingest   GET /rag/collections
+    │       ├── models.py        # GET /models/
+    │       └── health.py        # GET /health
+    ├── schemas/schemas.py       # Request and response models
+    ├── services/
+    │   ├── ollama_service.py    # Chat, streaming, embeddings
+    │   └── rag_service.py       # Chunking, ingestion, retrieval
+    ├── tests/
+    ├── requirements.txt
+    └── .env.example
 ```
+
+The frontend is not in this repository yet; the API is usable through
+`/docs` in the meantime.
 
 ---
 
@@ -142,11 +125,18 @@ cd mini-onyx
 docker compose up
 ```
 
-Open `http://localhost:3000`. First run pulls llama3 (~4 GB) and nomic-embed-text — allow ~10 minutes. Subsequent starts take ~30 seconds.
+Then pull the models into the running Ollama container, which takes a while the first time (llama3 is ~4 GB):
+
+```bash
+docker compose exec ollama ollama pull llama3
+docker compose exec ollama ollama pull nomic-embed-text
+```
+
+The API is then at `http://localhost:8000`, with interactive docs at `http://localhost:8000/docs`.
 
 ### Manual Setup
 
-Requires Python 3.11, Node.js 20, and [Ollama](https://ollama.ai).
+Requires Python 3.11 and [Ollama](https://ollama.ai).
 
 ```bash
 # Pull required models
@@ -159,14 +149,9 @@ py -3.11 -m venv venv && venv\Scripts\activate   # Windows
 pip install -r requirements.txt
 copy .env.example .env
 python -m uvicorn app.main:app --reload --port 8000
-
-# Frontend (separate terminal)
-cd frontend
-npm install
-npm run dev
 ```
 
-Open `http://localhost:3000`.
+Open `http://localhost:8000/docs`.
 
 ---
 
