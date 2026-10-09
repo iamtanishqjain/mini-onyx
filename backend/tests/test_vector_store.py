@@ -22,3 +22,32 @@ def test_the_readable_collections_are_still_listed(tmp_path):
     store = SimpleVectorStore(str(tmp_path))
 
     assert [c["name"] for c in store.list_collections()] == ["good"]
+
+
+def test_saving_leaves_no_temporary_file_behind(tmp_path):
+    store = SimpleVectorStore(str(tmp_path))
+    store.add(
+        name="docs",
+        ids=["1"],
+        embeddings=[[0.1, 0.2]],
+        documents=["hello"],
+        metadatas=[{"source": "a.txt"}],
+    )
+
+    assert (tmp_path / "docs.json").exists()
+    assert list(tmp_path.glob("*.tmp")) == []
+
+
+def test_a_saved_collection_reloads(tmp_path):
+    store = SimpleVectorStore(str(tmp_path))
+    store.add(
+        name="docs",
+        ids=["1"],
+        embeddings=[[0.1, 0.2]],
+        documents=["hello"],
+        metadatas=[{"source": "a.txt"}],
+    )
+
+    reopened = SimpleVectorStore(str(tmp_path))
+
+    assert len(reopened.collections["docs"]) == 1

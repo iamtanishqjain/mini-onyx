@@ -2,6 +2,7 @@ import uuid
 import json
 import logging
 import math
+import os
 from pathlib import Path
 from typing import List, Tuple
 
@@ -38,8 +39,14 @@ class SimpleVectorStore:
                 logger.warning("Skipping unreadable collection %s: %s", f.name, e)
 
     def _save(self, name: str):
-        with open(self._collection_path(name), "w") as fp:
+        # Write beside the target and rename, so an interrupted save leaves the
+        # previous collection intact rather than a half-written file. os.replace
+        # is atomic on both POSIX and Windows.
+        path = self._collection_path(name)
+        tmp = path.with_suffix(".json.tmp")
+        with open(tmp, "w") as fp:
             json.dump(self.collections[name], fp)
+        os.replace(tmp, path)
 
     def get_or_create(self, name: str):
         if name not in self.collections:
