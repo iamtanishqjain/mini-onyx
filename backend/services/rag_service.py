@@ -1,5 +1,6 @@
 import uuid
 import json
+import logging
 import math
 from pathlib import Path
 from typing import List, Tuple
@@ -7,6 +8,8 @@ from typing import List, Tuple
 from app.core.config import settings
 from schemas.schemas import DocumentChunk
 from services.ollama_service import ollama_service
+
+logger = logging.getLogger(__name__)
 
 
 # ── Simple vector store (pure Python, no deps) ───────────────────────────────
@@ -25,8 +28,14 @@ class SimpleVectorStore:
 
     def _load_all(self):
         for f in self.persist_dir.glob("*.json"):
-            with open(f, "r") as fp:
-                self.collections[f.stem] = json.load(fp)
+            try:
+                with open(f, "r") as fp:
+                    self.collections[f.stem] = json.load(fp)
+            except (json.JSONDecodeError, OSError) as e:
+                # The store is built at import time, so raising here stops the
+                # whole app from starting. One damaged collection should cost
+                # that collection, not the service.
+                logger.warning("Skipping unreadable collection %s: %s", f.name, e)
 
     def _save(self, name: str):
         with open(self._collection_path(name), "w") as fp:
