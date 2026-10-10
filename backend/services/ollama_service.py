@@ -5,12 +5,25 @@ from app.core.config import settings
 
 
 class OllamaService:
-    """Wraps the Ollama REST API for chat and embeddings."""
+    """Wraps the Ollama REST API for chat and embeddings.
 
-    def __init__(self):
-        self.base_url = settings.ollama_base_url
-        self.chat_model = settings.ollama_chat_model
-        self.embed_model = settings.ollama_embed_model
+    The module-level instance is created at import time, so these read from
+    settings on each access rather than copying them in __init__. Otherwise a
+    setting changed after import, which is what tests and any runtime reload
+    do, would never reach the service.
+    """
+
+    @property
+    def base_url(self) -> str:
+        return settings.ollama_base_url
+
+    @property
+    def chat_model(self) -> str:
+        return settings.ollama_chat_model
+
+    @property
+    def embed_model(self) -> str:
+        return settings.ollama_embed_model
 
     # ── Connection check ────────────────────────────────────────────────────
 
