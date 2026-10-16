@@ -87,3 +87,53 @@ def test_the_stream_is_not_buffered_by_proxies(monkeypatch):
 
     assert response.headers["cache-control"] == "no-cache"
     assert response.headers["x-accel-buffering"] == "no"
+
+
+def test_the_non_streaming_endpoint_returns_the_assistant_reply(monkeypatch):
+    from app.routers import chat
+
+    async def reply(messages, model=None):
+        return "Hello there"
+
+    monkeypatch.setattr(chat.ollama_service, "chat", reply)
+
+    body = client.post(
+        "/chat/", json={"messages": [{"role": "user", "content": "hi"}]}
+    ).json()
+
+    assert body == {"role": "assistant", "content": "Hello there"}
+
+
+def test_the_requested_model_overrides_the_default(monkeypatch):
+    from app.routers import chat
+
+    seen = {}
+
+    async def reply(messages, model=None):
+        seen["model"] = model
+        return "ok"
+
+    monkeypatch.setattr(chat.ollama_service, "chat", reply)
+
+    client.post(
+        "/chat/",
+        json={"messages": [{"role": "user", "content": "hi"}], "model": "mistral"},
+    )
+
+    assert seen["model"] == "mistral"
+
+
+def test_a_backend_failure_is_a_500(monkeypatch):
+    from app.routers import chat
+
+    async def boom(messages, model=None):
+        raise RuntimeError("ollama exploded")
+
+    monkeypatch.setattr(chat.ollama_service, "chat", boom)
+
+    response = client.post(
+        "/chat/", json={"messages": [{"role": "user", "content": "hi"}]}
+    )
+
+    assert response.status_code == 500
+    assert "Ollama error" in response.json()["detail"]
