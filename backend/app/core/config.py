@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     cors_origins: str = '["http://localhost:3000","http://127.0.0.1:3000"]'
 
+    # Uploads
+    max_upload_mb: int = 25
+
     # RAG
     chunk_size: int = 500
     chunk_overlap: int = 50

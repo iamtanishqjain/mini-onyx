@@ -8,6 +8,7 @@ from schemas.schemas import (
     CollectionsResponse,
     CollectionInfo,
 )
+from app.core.config import settings
 from services.rag_service import rag_service
 
 router = APIRouter(prefix="/rag", tags=["rag"])
@@ -36,6 +37,15 @@ async def ingest_document(
     file_bytes = await file.read()
     if not file_bytes:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+    # The whole upload is held in memory to be parsed, so cap it rather than
+    # letting one request decide how much the process allocates.
+    max_bytes = settings.max_upload_mb * 1024 * 1024
+    if len(file_bytes) > max_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File is larger than the {settings.max_upload_mb} MB limit.",
+        )
 
     try:
         col_name, chunks_added = await rag_service.ingest_document(

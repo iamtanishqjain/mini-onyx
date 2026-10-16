@@ -73,3 +73,35 @@ def test_an_empty_collection_name_is_rejected():
     response = client.post("/rag/query", json={"query": "hello", "collection_name": ""})
 
     assert response.status_code == 422
+
+
+def test_an_oversized_upload_is_rejected(monkeypatch):
+    from app.core import config
+
+    monkeypatch.setattr(config.settings, "max_upload_mb", 1)
+    oversized = b"x" * (1024 * 1024 + 1)
+
+    response = client.post(
+        "/rag/ingest", files={"file": ("notes.txt", oversized, "text/plain")}
+    )
+
+    assert response.status_code == 413
+    assert "1 MB limit" in response.json()["detail"]
+
+
+def test_an_upload_at_the_limit_is_accepted(monkeypatch):
+    from app.core import config
+
+    monkeypatch.setattr(config.settings, "max_upload_mb", 1)
+
+    async def ingest(filename, file_bytes, collection_name):
+        return collection_name, 1
+
+    monkeypatch.setattr(rag_routes.rag_service, "ingest_document", ingest)
+
+    response = client.post(
+        "/rag/ingest",
+        files={"file": ("notes.txt", b"x" * (1024 * 1024), "text/plain")},
+    )
+
+    assert response.status_code == 200
