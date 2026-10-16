@@ -17,7 +17,9 @@ class Message(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    messages: List[Message]
+    # A chat with no messages would still reach the model, costing an
+    # inference call for a prompt with no user turn in it.
+    messages: List[Message] = Field(min_length=1)
     model: Optional[str] = None          # overrides default if provided
     use_rag: bool = False                 # attach retrieved context
     collection_name: Optional[str] = None  # which RAG collection to query
