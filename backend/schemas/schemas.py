@@ -48,8 +48,9 @@ class IngestResponse(BaseModel):
 
 
 class QueryRequest(BaseModel):
-    query: str
-    collection_name: str
+    # Embedding whitespace costs a model call and can only return noise.
+    query: str = Field(min_length=1, pattern=r"\S")
+    collection_name: str = Field(min_length=1)
     top_k: int = Field(default=5, ge=1, le=20)
 
 

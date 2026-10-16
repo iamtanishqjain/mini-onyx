@@ -54,3 +54,22 @@ def test_deleting_an_unknown_collection_is_a_404(monkeypatch):
     response = client.delete("/rag/collections/does-not-exist")
 
     assert response.status_code == 404
+
+
+def test_an_empty_query_is_rejected():
+    response = client.post("/rag/query", json={"query": "", "collection_name": "docs"})
+
+    assert response.status_code == 422
+
+
+def test_a_whitespace_only_query_is_rejected():
+    # Embedding whitespace costs a model call and can only match noise.
+    response = client.post("/rag/query", json={"query": "   ", "collection_name": "docs"})
+
+    assert response.status_code == 422
+
+
+def test_an_empty_collection_name_is_rejected():
+    response = client.post("/rag/query", json={"query": "hello", "collection_name": ""})
+
+    assert response.status_code == 422
