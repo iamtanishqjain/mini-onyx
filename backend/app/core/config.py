@@ -1,3 +1,4 @@
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
 import json
@@ -20,12 +21,23 @@ class Settings(BaseSettings):
     cors_origins: str = '["http://localhost:3000","http://127.0.0.1:3000"]'
 
     # Uploads
-    max_upload_mb: int = 25
+    max_upload_mb: int = Field(default=25, ge=1)
 
     # RAG
-    chunk_size: int = 500
-    chunk_overlap: int = 50
-    rag_top_k: int = 5
+    # chunk_size below 1 makes the chunking loop stop advancing, which hangs
+    # ingestion rather than failing, so these are bounded here.
+    chunk_size: int = Field(default=500, ge=1)
+    chunk_overlap: int = Field(default=50, ge=0)
+    rag_top_k: int = Field(default=5, ge=1)
+
+    @model_validator(mode="after")
+    def _overlap_fits_in_a_chunk(self):
+        if self.chunk_overlap >= self.chunk_size:
+            raise ValueError(
+                f"CHUNK_OVERLAP ({self.chunk_overlap}) must be smaller than "
+                f"CHUNK_SIZE ({self.chunk_size})"
+            )
+        return self
 
     @property
     def cors_origins_list(self) -> List[str]:
