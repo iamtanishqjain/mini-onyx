@@ -105,3 +105,24 @@ def test_an_upload_at_the_limit_is_accepted(monkeypatch):
     )
 
     assert response.status_code == 200
+
+
+def test_a_corrupt_pdf_is_a_422_not_a_500():
+    # The reader failing on a bad upload is the user's problem to fix, and a
+    # 500 would say the server broke while telling them nothing useful.
+    response = client.post(
+        "/rag/ingest",
+        files={"file": ("broken.pdf", b"not a pdf at all", "application/pdf")},
+    )
+
+    assert response.status_code == 422
+    assert "broken.pdf" in response.json()["detail"]
+
+
+def test_a_corrupt_docx_is_a_422_not_a_500():
+    response = client.post(
+        "/rag/ingest",
+        files={"file": ("broken.docx", b"not a docx", "application/octet-stream")},
+    )
+
+    assert response.status_code == 422

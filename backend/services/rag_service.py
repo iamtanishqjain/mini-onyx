@@ -136,10 +136,16 @@ def parse_txt(file_bytes: bytes) -> str:
 
 def parse_file(filename: str, file_bytes: bytes) -> str:
     ext = Path(filename).suffix.lower()
-    if ext == ".pdf":       return parse_pdf(file_bytes)
-    elif ext in (".docx",): return parse_docx(file_bytes)
-    elif ext in (".txt", ".md"): return parse_txt(file_bytes)
-    else: raise ValueError(f"Unsupported file type: {ext}")
+    if ext not in (".pdf", ".docx", ".txt", ".md"):
+        raise ValueError(f"Unsupported file type: {ext}")
+
+    parser = {".pdf": parse_pdf, ".docx": parse_docx}.get(ext, parse_txt)
+    try:
+        return parser(file_bytes)
+    except Exception as e:
+        # A file the reader cannot open is a bad upload, not a server fault.
+        # Raised as ValueError so the route answers 422 rather than 500.
+        raise ValueError(f"Could not read '{filename}': {e}") from e
 
 
 # ── RAG Service ───────────────────────────────────────────────────────────────
