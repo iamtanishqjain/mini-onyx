@@ -29,7 +29,21 @@ class Settings(BaseSettings):
 
     @property
     def cors_origins_list(self) -> List[str]:
-        return json.loads(self.cors_origins)
+        """Origins as a JSON array or a plain comma-separated list.
+
+        main.py reads this while the app is being imported, so a malformed
+        value used to kill startup with a bare JSONDecodeError that named
+        neither the setting nor the file it came from.
+        """
+        raw = self.cors_origins.strip()
+        if not raw:
+            return []
+        if raw.startswith("["):
+            try:
+                return json.loads(raw)
+            except json.JSONDecodeError as e:
+                raise ValueError(f"CORS_ORIGINS is not valid JSON: {e}") from e
+        return [origin.strip() for origin in raw.split(",") if origin.strip()]
 
 
 settings = Settings()
