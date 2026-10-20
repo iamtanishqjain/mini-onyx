@@ -211,11 +211,24 @@ curl -X POST http://localhost:8000/rag/ingest \
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_CHAT_MODEL=llama3
 OLLAMA_EMBED_MODEL=nomic-embed-text
+
+# Where the vector store keeps its collections
 CHROMA_PERSIST_DIR=./chroma_db
+
+# Browser origins allowed to call the API. A JSON array, or a plain
+# comma-separated list such as http://localhost:3000,http://127.0.0.1:3000
+CORS_ORIGINS=["http://localhost:3000","http://127.0.0.1:3000"]
+
+# Largest document /rag/ingest will accept
+MAX_UPLOAD_MB=25
+
+# CHUNK_OVERLAP has to be smaller than CHUNK_SIZE
 CHUNK_SIZE=500
 CHUNK_OVERLAP=50
 RAG_TOP_K=5
 ```
+
+These are checked when the app starts, so a bad value fails straight away with a message naming the setting instead of turning up later as strange behaviour.
 
 ---
 
