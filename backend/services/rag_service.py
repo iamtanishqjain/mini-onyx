@@ -60,6 +60,18 @@ class SimpleVectorStore:
             col.append({"id": id_, "embedding": emb, "document": doc, "metadata": meta})
         self._save(name)
 
+    def remove_source(self, name: str, source: str) -> int:
+        """Drop every chunk that came from one source file. Returns how many."""
+        col = self.collections.get(name)
+        if not col:
+            return 0
+        kept = [c for c in col if c.get("metadata", {}).get("source") != source]
+        removed = len(col) - len(kept)
+        if removed:
+            self.collections[name] = kept
+            self._save(name)
+        return removed
+
     def _cosine_similarity(self, a: list[float], b: list[float]) -> float:
         # Vectors of different lengths mean the collection was built with a
         # different embedding model. zip would compare the shared prefix and
@@ -183,6 +195,10 @@ class RAGService:
             raise ValueError("Could not extract text from document.")
         chunks = split_text(raw_text, settings.chunk_size, settings.chunk_overlap)
         embeddings = [await ollama_service.embed(c) for c in chunks]
+        # Re-uploading a file replaces its chunks. Appending them left the old
+        # copy in place, so retrieval returned the same passage twice and spent
+        # the context window saying it.
+        self.store.remove_source(collection_name, filename)
         self.store.add(
             name=collection_name,
             ids=[str(uuid.uuid4()) for _ in chunks],

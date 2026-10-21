@@ -126,3 +126,30 @@ def test_a_corrupt_docx_is_a_422_not_a_500():
     )
 
     assert response.status_code == 422
+
+
+def test_reingesting_a_file_replaces_its_chunks_rather_than_duplicating(monkeypatch, tmp_path):
+    from app.core import config
+    from services.rag_service import RAGService
+
+    monkeypatch.setattr(config.settings, "chroma_persist_dir", str(tmp_path))
+
+    async def embed(text):
+        return [float(len(text))]
+
+    service = RAGService()
+    monkeypatch.setattr("services.rag_service.ollama_service.embed", embed)
+
+    import asyncio
+
+    for _ in range(2):
+        asyncio.run(
+            service.ingest_document(
+                filename="report.txt",
+                file_bytes=b"chunk one. chunk two.",
+                collection_name="docs",
+            )
+        )
+
+    stored = service.store.collections["docs"]
+    assert len({c["document"] for c in stored}) == len(stored), "chunks were duplicated"

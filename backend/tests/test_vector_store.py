@@ -82,3 +82,33 @@ def test_adding_fewer_embeddings_than_chunks_is_an_error(tmp_path):
             documents=["a", "b", "c"],
             metadatas=[{}, {}, {}],
         )
+
+
+def test_removing_a_source_leaves_the_other_documents(tmp_path):
+    store = SimpleVectorStore(str(tmp_path))
+    store.add(
+        name="docs",
+        ids=["1", "2"],
+        embeddings=[[1.0], [2.0]],
+        documents=["from a", "from b"],
+        metadatas=[{"source": "a.pdf"}, {"source": "b.pdf"}],
+    )
+
+    removed = store.remove_source("docs", "a.pdf")
+
+    assert removed == 1
+    assert [c["document"] for c in store.collections["docs"]] == ["from b"]
+
+
+def test_removing_an_unknown_source_changes_nothing(tmp_path):
+    store = SimpleVectorStore(str(tmp_path))
+    store.add(
+        name="docs",
+        ids=["1"],
+        embeddings=[[1.0]],
+        documents=["hello"],
+        metadatas=[{"source": "a.pdf"}],
+    )
+
+    assert store.remove_source("docs", "nope.pdf") == 0
+    assert len(store.collections["docs"]) == 1
