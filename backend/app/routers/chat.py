@@ -1,14 +1,16 @@
-from fastapi import APIRouter, HTTPException
-from fastapi.responses import StreamingResponse
 import json
 
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
+
+from app.core.config import settings
 from schemas.schemas import ChatRequest, ChatResponse
 from services.ollama_service import ollama_service
 from services.rag_service import rag_service
-from app.core.config import settings
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
+# ruff: noqa: E501 - wrapping these would change the prompt the model receives
 RAG_SYSTEM_PROMPT = """You are a helpful AI assistant. You have been given relevant context below to help answer the user's question. Use this context to provide accurate, grounded answers. Always cite which source you are referencing.
 
 CONTEXT:

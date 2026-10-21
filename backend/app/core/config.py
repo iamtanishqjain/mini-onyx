@@ -1,7 +1,7 @@
+import json
+
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import List
-import json
 
 
 class Settings(BaseSettings):
@@ -40,7 +40,7 @@ class Settings(BaseSettings):
         return self
 
     @property
-    def cors_origins_list(self) -> List[str]:
+    def cors_origins_list(self) -> list[str]:
         """Origins as a JSON array or a plain comma-separated list.
 
         main.py reads this while the app is being imported, so a malformed

@@ -1,10 +1,9 @@
-import uuid
 import json
 import logging
 import math
 import os
+import uuid
 from pathlib import Path
-from typing import List, Tuple
 
 from app.core.config import settings
 from schemas.schemas import DocumentChunk
@@ -30,7 +29,7 @@ class SimpleVectorStore:
     def _load_all(self):
         for f in self.persist_dir.glob("*.json"):
             try:
-                with open(f, "r") as fp:
+                with open(f) as fp:
                     self.collections[f.stem] = json.load(fp)
             except (json.JSONDecodeError, OSError) as e:
                 # The store is built at import time, so raising here stops the
@@ -61,7 +60,7 @@ class SimpleVectorStore:
             col.append({"id": id_, "embedding": emb, "document": doc, "metadata": meta})
         self._save(name)
 
-    def _cosine_similarity(self, a: List[float], b: List[float]) -> float:
+    def _cosine_similarity(self, a: list[float], b: list[float]) -> float:
         # Vectors of different lengths mean the collection was built with a
         # different embedding model. zip would compare the shared prefix and
         # return a plausible-looking but meaningless score.
@@ -77,7 +76,7 @@ class SimpleVectorStore:
             return 0.0
         return dot / (norm_a * norm_b)
 
-    def query(self, name: str, query_embedding: List[float], top_k: int):
+    def query(self, name: str, query_embedding: list[float], top_k: int):
         col = self.collections.get(name, [])
         if not col:
             return []
@@ -106,7 +105,7 @@ class SimpleVectorStore:
 
 # ── Text helpers ─────────────────────────────────────────────────────────────
 
-def split_text(text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]:
+def split_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]:
     chunks, start = [], 0
     while start < len(text):
         end = start + chunk_size
@@ -127,15 +126,17 @@ def split_text(text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]
 
 
 def parse_pdf(file_bytes: bytes) -> str:
-    from pypdf import PdfReader
     import io
+
+    from pypdf import PdfReader
     reader = PdfReader(io.BytesIO(file_bytes))
     return "\n\n".join(p.extract_text() or "" for p in reader.pages)
 
 
 def parse_docx(file_bytes: bytes) -> str:
-    from docx import Document
     import io
+
+    from docx import Document
     doc = Document(io.BytesIO(file_bytes))
     return "\n\n".join(p.text for p in doc.paragraphs if p.text.strip())
 
@@ -175,7 +176,7 @@ class RAGService:
     def __init__(self):
         self.store = SimpleVectorStore(settings.chroma_persist_dir)
 
-    async def ingest_document(self, filename, file_bytes, collection_name) -> Tuple[str, int]:
+    async def ingest_document(self, filename, file_bytes, collection_name) -> tuple[str, int]:
         collection_name = sanitize_collection_name(collection_name)
         raw_text = parse_file(filename, file_bytes)
         if not raw_text.strip():
@@ -191,7 +192,7 @@ class RAGService:
         )
         return collection_name, len(chunks)
 
-    async def query(self, query_text, collection_name, top_k=5) -> List[DocumentChunk]:
+    async def query(self, query_text, collection_name, top_k=5) -> list[DocumentChunk]:
         collection_name = sanitize_collection_name(collection_name)
         query_emb = await ollama_service.embed(query_text)
         results = self.store.query(collection_name, query_emb, top_k)
@@ -205,7 +206,9 @@ class RAGService:
             for item, score in results
         ]
 
-    async def build_context(self, query_text, collection_name, top_k=5) -> Tuple[str, List[DocumentChunk]]:
+    async def build_context(
+        self, query_text, collection_name, top_k=5
+    ) -> tuple[str, list[DocumentChunk]]:
         chunks = await self.query(query_text, collection_name, top_k)
         if not chunks:
             return "", []

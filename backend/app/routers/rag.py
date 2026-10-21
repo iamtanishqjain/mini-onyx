@@ -1,14 +1,14 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Form
-from typing import Optional
 
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+
+from app.core.config import settings
 from schemas.schemas import (
+    CollectionInfo,
+    CollectionsResponse,
     IngestResponse,
     QueryRequest,
     QueryResponse,
-    CollectionsResponse,
-    CollectionInfo,
 )
-from app.core.config import settings
 from services.rag_service import rag_service
 
 router = APIRouter(prefix="/rag", tags=["rag"])
@@ -62,7 +62,10 @@ async def ingest_document(
         collection_name=col_name,
         chunks_added=chunks_added,
         filename=filename,
-        message=f"Successfully ingested '{filename}' into collection '{col_name}' ({chunks_added} chunks).",
+        message=(
+            f"Successfully ingested '{filename}' into collection "
+            f"'{col_name}' ({chunks_added} chunks)."
+        ),
     )
 
 

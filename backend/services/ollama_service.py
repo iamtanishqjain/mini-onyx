@@ -1,6 +1,8 @@
-import httpx
 import json
-from typing import AsyncGenerator, List, Optional
+from collections.abc import AsyncGenerator
+
+import httpx
+
 from app.core.config import settings
 
 
@@ -37,7 +39,7 @@ class OllamaService:
 
     # ── Available models ────────────────────────────────────────────────────
 
-    async def list_models(self) -> List[dict]:
+    async def list_models(self) -> list[dict]:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(f"{self.base_url}/api/tags")
             resp.raise_for_status()
@@ -47,8 +49,8 @@ class OllamaService:
 
     async def chat_stream(
         self,
-        messages: List[dict],
-        model: Optional[str] = None,
+        messages: list[dict],
+        model: str | None = None,
     ) -> AsyncGenerator[str, None]:
         """Yields text chunks as they arrive from Ollama."""
         payload = {
@@ -56,32 +58,31 @@ class OllamaService:
             "messages": messages,
             "stream": True,
         }
-        async with httpx.AsyncClient(timeout=120) as client:
-            async with client.stream(
-                "POST",
-                f"{self.base_url}/api/chat",
-                json=payload,
-            ) as response:
-                response.raise_for_status()
-                async for line in response.aiter_lines():
-                    if not line.strip():
-                        continue
-                    try:
-                        data = json.loads(line)
-                        content = data.get("message", {}).get("content", "")
-                        if content:
-                            yield content
-                        if data.get("done"):
-                            break
-                    except json.JSONDecodeError:
-                        continue
+        async with httpx.AsyncClient(timeout=120) as client, client.stream(
+            "POST",
+            f"{self.base_url}/api/chat",
+            json=payload,
+        ) as response:
+            response.raise_for_status()
+            async for line in response.aiter_lines():
+                if not line.strip():
+                    continue
+                try:
+                    data = json.loads(line)
+                    content = data.get("message", {}).get("content", "")
+                    if content:
+                        yield content
+                    if data.get("done"):
+                        break
+                except json.JSONDecodeError:
+                    continue
 
     # ── Chat (non-streaming, returns full response) ─────────────────────────
 
     async def chat(
         self,
-        messages: List[dict],
-        model: Optional[str] = None,
+        messages: list[dict],
+        model: str | None = None,
     ) -> str:
         payload = {
             "model": model or self.chat_model,
@@ -95,7 +96,7 @@ class OllamaService:
 
     # ── Embeddings ──────────────────────────────────────────────────────────
 
-    async def embed(self, text: str) -> List[float]:
+    async def embed(self, text: str) -> list[float]:
         """Get embedding vector for a piece of text."""
         payload = {
             "model": self.embed_model,
@@ -106,7 +107,7 @@ class OllamaService:
             resp.raise_for_status()
             return resp.json()["embedding"]
 
-    async def embed_batch(self, texts: List[str]) -> List[List[float]]:
+    async def embed_batch(self, texts: list[str]) -> list[list[float]]:
         """Embed multiple texts (sequential — Ollama has no batch endpoint)."""
         embeddings = []
         for text in texts:

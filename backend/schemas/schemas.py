@@ -1,7 +1,6 @@
-from pydantic import BaseModel, Field
-from typing import List, Optional
 from enum import Enum
 
+from pydantic import BaseModel, Field
 
 # ── Chat ────────────────────────────────────────────────────────────────────
 
@@ -19,10 +18,10 @@ class Message(BaseModel):
 class ChatRequest(BaseModel):
     # A chat with no messages would still reach the model, costing an
     # inference call for a prompt with no user turn in it.
-    messages: List[Message] = Field(min_length=1)
-    model: Optional[str] = None          # overrides default if provided
+    messages: list[Message] = Field(min_length=1)
+    model: str | None = None          # overrides default if provided
     use_rag: bool = False                 # attach retrieved context
-    collection_name: Optional[str] = None  # which RAG collection to query
+    collection_name: str | None = None  # which RAG collection to query
     stream: bool = True
 
 
@@ -37,7 +36,7 @@ class DocumentChunk(BaseModel):
     id: str
     content: str
     metadata: dict
-    score: Optional[float] = None
+    score: float | None = None
 
 
 class IngestResponse(BaseModel):
@@ -56,7 +55,7 @@ class QueryRequest(BaseModel):
 
 class QueryResponse(BaseModel):
     query: str
-    results: List[DocumentChunk]
+    results: list[DocumentChunk]
 
 
 class CollectionInfo(BaseModel):
@@ -65,19 +64,19 @@ class CollectionInfo(BaseModel):
 
 
 class CollectionsResponse(BaseModel):
-    collections: List[CollectionInfo]
+    collections: list[CollectionInfo]
 
 
 # ── Models ───────────────────────────────────────────────────────────────────
 
 class ModelInfo(BaseModel):
     name: str
-    size: Optional[str] = None
-    modified_at: Optional[str] = None
+    size: str | None = None
+    modified_at: str | None = None
 
 
 class ModelsResponse(BaseModel):
-    models: List[ModelInfo]
+    models: list[ModelInfo]
 
 
 # ── Health ───────────────────────────────────────────────────────────────────

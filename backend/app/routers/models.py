@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException
-from schemas.schemas import ModelsResponse, ModelInfo
+
+from schemas.schemas import ModelInfo, ModelsResponse
 from services.ollama_service import ollama_service
 
 router = APIRouter(prefix="/models", tags=["models"])

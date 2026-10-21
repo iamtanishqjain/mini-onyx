@@ -1,0 +1,15 @@
+target-version = "py310"
+line-length = 100
+
+[lint]
+select = ["F", "E", "W", "B", "SIM", "UP", "I"]
+ignore = [
+    # FastAPI's dependency markers are function calls in defaults by design.
+    "B008",
+    # StrEnum needs 3.11 and the project supports 3.10.
+    "UP042",
+]
+
+[lint.per-file-ignores]
+# Reading a property is the behaviour under test, not a useless expression.
+"tests/*" = ["B018"]
