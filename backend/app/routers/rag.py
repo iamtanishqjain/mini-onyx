@@ -54,9 +54,9 @@ async def ingest_document(
             collection_name=collection_name,
         )
     except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=422, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ingestion failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Ingestion failed: {e}") from e
 
     return IngestResponse(
         collection_name=col_name,
@@ -79,7 +79,7 @@ async def query_documents(request: QueryRequest):
             top_k=request.top_k,
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Query failed: {e}") from e
 
     return QueryResponse(query=request.query, results=chunks)
 
@@ -93,7 +93,7 @@ async def list_collections():
             collections=[CollectionInfo(**c) for c in collections]
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.delete("/collections/{collection_name}")

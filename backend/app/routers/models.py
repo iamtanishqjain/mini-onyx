@@ -20,4 +20,4 @@ async def list_models():
         ]
         return ModelsResponse(models=models)
     except Exception as e:
-        raise HTTPException(status_code=503, detail=f"Could not reach Ollama: {str(e)}")
+        raise HTTPException(status_code=503, detail=f"Could not reach Ollama: {e}") from e

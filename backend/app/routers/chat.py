@@ -120,4 +120,4 @@ async def chat(request: ChatRequest):
         content = await ollama_service.chat(messages=messages, model=request.model)
         return ChatResponse(content=content)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ollama error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Ollama error: {e}") from e
