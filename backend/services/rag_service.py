@@ -55,12 +55,22 @@ class SimpleVectorStore:
 
     def add(self, name: str, ids, embeddings, documents, metadatas):
         col = self.get_or_create(name)
-        for id_, emb, doc, meta in zip(ids, embeddings, documents, metadatas):
+        # strict, so a short embeddings list raises instead of zip quietly
+        # truncating and storing fewer chunks than the document produced.
+        for id_, emb, doc, meta in zip(ids, embeddings, documents, metadatas, strict=True):
             col.append({"id": id_, "embedding": emb, "document": doc, "metadata": meta})
         self._save(name)
 
     def _cosine_similarity(self, a: List[float], b: List[float]) -> float:
-        dot = sum(x * y for x, y in zip(a, b))
+        # Vectors of different lengths mean the collection was built with a
+        # different embedding model. zip would compare the shared prefix and
+        # return a plausible-looking but meaningless score.
+        if len(a) != len(b):
+            raise ValueError(
+                f"embedding length {len(b)} does not match the query's {len(a)}; "
+                "the collection was built with a different embedding model"
+            )
+        dot = sum(x * y for x, y in zip(a, b, strict=True))
         norm_a = math.sqrt(sum(x * x for x in a))
         norm_b = math.sqrt(sum(x * x for x in b))
         if norm_a == 0 or norm_b == 0:

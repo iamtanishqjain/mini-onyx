@@ -1,3 +1,4 @@
+import pytest
 import json
 
 from services.rag_service import SimpleVectorStore
@@ -51,3 +52,32 @@ def test_a_saved_collection_reloads(tmp_path):
     reopened = SimpleVectorStore(str(tmp_path))
 
     assert len(reopened.collections["docs"]) == 1
+
+
+def test_a_mismatched_embedding_length_is_an_error_not_a_wrong_score(tmp_path):
+    # Changing the embedding model leaves old vectors a different length.
+    # zip used to compare the shared prefix and return a plausible number.
+    store = SimpleVectorStore(str(tmp_path))
+    store.add(
+        name="docs",
+        ids=["1"],
+        embeddings=[[1.0, 0.0, 0.0, 99.0, 99.0]],
+        documents=["hello"],
+        metadatas=[{"source": "a.txt"}],
+    )
+
+    with pytest.raises(ValueError, match="different embedding model"):
+        store.query("docs", [1.0, 0.0, 0.0], top_k=1)
+
+
+def test_adding_fewer_embeddings_than_chunks_is_an_error(tmp_path):
+    store = SimpleVectorStore(str(tmp_path))
+
+    with pytest.raises(ValueError):
+        store.add(
+            name="docs",
+            ids=["1", "2", "3"],
+            embeddings=[[0.1], [0.2]],
+            documents=["a", "b", "c"],
+            metadatas=[{}, {}, {}],
+        )
