@@ -6,19 +6,16 @@ import pytest
 from services.ollama_service import ollama_service
 
 
-def ndjson_transport(lines, status=200):
-    body = "".join(json.dumps(line) + "\n" for line in lines)
-
-    def handler(request):
-        return httpx.Response(status, text=body)
-
-    return httpx.MockTransport(handler)
+def ndjson(*objects):
+    return "".join(json.dumps(o) + "\n" for o in objects)
 
 
 @pytest.fixture
-def stream_from(monkeypatch):
-    def install(lines, status=200):
-        transport = ndjson_transport(lines, status)
+def stream_body(monkeypatch):
+    """Make chat_stream read a canned NDJSON body instead of calling Ollama."""
+
+    def install(body):
+        transport = httpx.MockTransport(lambda request: httpx.Response(200, text=body))
         original = httpx.AsyncClient
 
         def client(*args, **kwargs):
@@ -30,60 +27,62 @@ def stream_from(monkeypatch):
     return install
 
 
-async def collect(messages=None):
-    return [c async for c in ollama_service.chat_stream(messages or [{"role": "user", "content": "hi"}])]
+async def collect():
+    messages = [{"role": "user", "content": "hi"}]
+    return [chunk async for chunk in ollama_service.chat_stream(messages)]
 
 
 @pytest.mark.asyncio
-async def test_tokens_are_yielded_in_order(stream_from):
-    stream_from([
-        {"message": {"content": "Hel"}},
-        {"message": {"content": "lo"}},
-        {"done": True},
-    ])
+async def test_tokens_are_yielded_in_order(stream_body):
+    stream_body(
+        ndjson(
+            {"message": {"content": "Hel"}},
+            {"message": {"content": "lo"}},
+            {"done": True},
+        )
+    )
 
     assert await collect() == ["Hel", "lo"]
 
 
 @pytest.mark.asyncio
-async def test_an_error_line_raises_rather_than_ending_the_stream(stream_from):
-    # Ignoring it left the caller with an empty reply and no error at all.
-    stream_from([{"error": "model 'nope' not found"}])
+async def test_an_error_line_raises_rather_than_ending_the_stream(stream_body):
+    # Skipping it ended the stream with no tokens, so the caller showed an
+    # empty reply and no sign that anything had failed.
+    stream_body(ndjson({"error": "model 'nope' not found"}))
 
     with pytest.raises(RuntimeError, match="not found"):
         await collect()
 
 
 @pytest.mark.asyncio
-async def test_an_error_after_some_tokens_still_raises(stream_from):
-    stream_from([
-        {"message": {"content": "partial"}},
-        {"error": "context length exceeded"},
-    ])
+async def test_an_error_after_some_tokens_still_raises(stream_body):
+    stream_body(
+        ndjson(
+            {"message": {"content": "partial"}},
+            {"error": "context length exceeded"},
+        )
+    )
 
     with pytest.raises(RuntimeError, match="context length"):
         await collect()
 
 
 @pytest.mark.asyncio
-async def test_malformed_lines_are_skipped(stream_from, monkeypatch):
-    transport = httpx.MockTransport(
-        lambda request: httpx.Response(200, text='not json\n{"message":{"content":"ok"}}\n{"done":true}\n')
-    )
-    original = httpx.AsyncClient
-    monkeypatch.setattr(
-        httpx, "AsyncClient", lambda *a, **k: original(*a, **{**k, "transport": transport})
-    )
+async def test_malformed_lines_are_skipped(stream_body):
+    stream_body("not json\n" + ndjson({"message": {"content": "ok"}}, {"done": True}))
 
     assert await collect() == ["ok"]
 
 
 @pytest.mark.asyncio
-async def test_nothing_is_yielded_after_done(stream_from):
-    stream_from([
-        {"message": {"content": "first"}},
-        {"done": True},
-        {"message": {"content": "should not arrive"}},
-    ])
+async def test_nothing_is_yielded_after_done(stream_body):
+    stream_body(
+        ndjson(
+            {"message": {"content": "first"}},
+            {"done": True},
+            {"message": {"content": "should not arrive"}},
+        )
+    )
 
     assert await collect() == ["first"]
