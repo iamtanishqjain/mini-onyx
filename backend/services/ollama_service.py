@@ -114,7 +114,16 @@ class OllamaService:
         async with httpx.AsyncClient(timeout=60) as client:
             resp = await client.post(f"{self.base_url}/api/embeddings", json=payload)
             resp.raise_for_status()
-            return resp.json()["embedding"]
+            body = resp.json()
+
+        embedding = body.get("embedding")
+        if not embedding:
+            # Usually OLLAMA_EMBED_MODEL pointing at a chat model. Indexing the
+            # key straight out raised a bare KeyError('embedding'), which
+            # reached the user as "Ingestion failed: 'embedding'".
+            reason = body.get("error") or "the response contained no embedding"
+            raise RuntimeError(f"Model '{self.embed_model}' did not return an embedding: {reason}")
+        return embedding
 
     async def embed_batch(self, texts: list[str]) -> list[list[float]]:
         """Embed multiple texts (sequential — Ollama has no batch endpoint)."""
