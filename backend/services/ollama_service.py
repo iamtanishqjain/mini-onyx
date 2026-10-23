@@ -69,13 +69,22 @@ class OllamaService:
                     continue
                 try:
                     data = json.loads(line)
-                    content = data.get("message", {}).get("content", "")
-                    if content:
-                        yield content
-                    if data.get("done"):
-                        break
                 except json.JSONDecodeError:
                     continue
+
+                # Ollama reports a mid-stream failure, a model that will not
+                # load or a context that overflows, as an error line rather
+                # than a status code. Ignoring it ended the stream with no
+                # tokens at all, so the caller showed an empty reply and no
+                # sign that anything had gone wrong.
+                if data.get("error"):
+                    raise RuntimeError(f"Ollama: {data['error']}")
+
+                content = data.get("message", {}).get("content", "")
+                if content:
+                    yield content
+                if data.get("done"):
+                    break
 
     # ── Chat (non-streaming, returns full response) ─────────────────────────
 
