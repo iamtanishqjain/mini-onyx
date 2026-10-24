@@ -240,3 +240,77 @@ def test_a_corrupt_stored_chunk_is_a_500_not_a_422(store):
     )
 
     assert response.status_code == 500
+
+
+def chunks(service, name, *vectors):
+    service.store.add(
+        name=name,
+        ids=[str(i) for i in range(len(vectors))],
+        embeddings=list(vectors),
+        documents=[f"chunk {i}" for i in range(len(vectors))],
+        metadatas=[{"source": "a.txt", "chunk_index": i} for i in range(len(vectors))],
+    )
+
+
+def test_a_query_returns_the_chunks_best_match_first(store, monkeypatch):
+    service = store()
+    chunks(service, "docs", [0.0, 1.0], [1.0, 0.0])
+
+    async def embed(text):
+        return [1.0, 0.0]
+
+    monkeypatch.setattr("services.rag_service.ollama_service.embed", embed)
+
+    body = client.post(
+        "/rag/query", json={"query": "hello", "collection_name": "docs"}
+    ).json()
+
+    assert [c["content"] for c in body["results"]] == ["chunk 1", "chunk 0"]
+    assert body["results"][0]["score"] == 1.0
+    assert body["results"][0]["metadata"]["source"] == "a.txt"
+    assert body["query"] == "hello"
+
+
+def test_top_k_caps_the_results(store, monkeypatch):
+    service = store()
+    chunks(service, "docs", [1.0, 0.0], [0.9, 0.1], [0.0, 1.0])
+
+    async def embed(text):
+        return [1.0, 0.0]
+
+    monkeypatch.setattr("services.rag_service.ollama_service.embed", embed)
+
+    body = client.post(
+        "/rag/query",
+        json={"query": "hello", "collection_name": "docs", "top_k": 2},
+    ).json()
+
+    assert len(body["results"]) == 2
+
+
+def test_a_collection_whose_chunks_were_all_removed_still_answers_200(store):
+    # It exists, it just has nothing left to match, which is not the 404 that
+    # a name nothing was ever ingested into gets.
+    service = store()
+    chunks(service, "docs", [1.0])
+    service.store.remove_source("docs", "a.txt")
+
+    response = client.post(
+        "/rag/query", json={"query": "hello", "collection_name": "docs"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["results"] == []
+
+
+def test_a_collection_can_be_queried_by_the_name_it_was_created_with(store):
+    # Ingest stores it sanitized, so "my docs" is on disk as "my_docs".
+    service = store()
+    chunks(service, "my_docs", [1.0])
+
+    response = client.post(
+        "/rag/query", json={"query": "hello", "collection_name": "my docs"}
+    )
+
+    assert response.status_code == 200
+    assert len(response.json()["results"]) == 1
