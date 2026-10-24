@@ -161,3 +161,27 @@ def test_rag_against_an_unknown_collection_is_a_404(monkeypatch):
 
     assert response.status_code == 404
     assert "typo" in response.json()["detail"]
+
+
+def test_rag_with_a_mismatched_embedding_model_is_a_422(monkeypatch):
+    from app.routers import chat
+    from services.rag_service import EmbeddingMismatchError
+
+    async def build_context(query_text, collection_name, top_k):
+        raise EmbeddingMismatchError(
+            "the collection was built with a different embedding model"
+        )
+
+    monkeypatch.setattr(chat.rag_service, "build_context", build_context)
+
+    response = client.post(
+        "/chat/",
+        json={
+            "messages": [{"role": "user", "content": "hi"}],
+            "use_rag": True,
+            "collection_name": "docs",
+        },
+    )
+
+    assert response.status_code == 422
+    assert "different embedding model" in response.json()["detail"]

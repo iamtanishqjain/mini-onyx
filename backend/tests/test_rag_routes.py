@@ -201,3 +201,42 @@ def test_an_unknown_collection_is_not_embedded(store, monkeypatch):
     client.post("/rag/query", json={"query": "hello", "collection_name": "typo"})
 
     assert calls == []
+
+
+def test_a_collection_from_another_embedding_model_is_a_422(store):
+    # Scoring a 384-dim query against 768-dim chunks is not a server fault,
+    # and the 500 it used to answer said nothing about what to change.
+    service = store(dimensions=1)
+    service.store.add(
+        name="docs",
+        ids=["1"],
+        embeddings=[[1.0, 0.0]],
+        documents=["hello"],
+        metadatas=[{"source": "a.txt"}],
+    )
+
+    response = client.post(
+        "/rag/query", json={"query": "hello", "collection_name": "docs"}
+    )
+
+    assert response.status_code == 422
+    assert "different embedding model" in response.json()["detail"]
+
+
+def test_a_corrupt_stored_chunk_is_a_500_not_a_422(store):
+    # Pydantic's ValidationError is itself a ValueError, so catching that
+    # broadly blamed the caller's request for the store's own bad data.
+    service = store()
+    service.store.add(
+        name="docs",
+        ids=["1"],
+        embeddings=[[1.0]],
+        documents=["hello"],
+        metadatas=[None],
+    )
+
+    response = client.post(
+        "/rag/query", json={"query": "hello", "collection_name": "docs"}
+    )
+
+    assert response.status_code == 500

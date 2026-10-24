@@ -9,7 +9,11 @@ from schemas.schemas import (
     QueryRequest,
     QueryResponse,
 )
-from services.rag_service import CollectionNotFoundError, rag_service
+from services.rag_service import (
+    CollectionNotFoundError,
+    EmbeddingMismatchError,
+    rag_service,
+)
 
 router = APIRouter(prefix="/rag", tags=["rag"])
 
@@ -83,6 +87,11 @@ async def query_documents(request: QueryRequest):
         )
     except CollectionNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
+    except EmbeddingMismatchError as e:
+        # The collection was built with a different embedding model, which the
+        # caller fixes by setting OLLAMA_EMBED_MODEL back or re-ingesting. A
+        # 500 claimed the server had broken, as the ingest route used to.
+        raise HTTPException(status_code=422, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Query failed: {e}") from e
 

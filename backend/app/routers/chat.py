@@ -6,7 +6,11 @@ from fastapi.responses import StreamingResponse
 from app.core.config import settings
 from schemas.schemas import ChatRequest, ChatResponse
 from services.ollama_service import ollama_service
-from services.rag_service import CollectionNotFoundError, rag_service
+from services.rag_service import (
+    CollectionNotFoundError,
+    EmbeddingMismatchError,
+    rag_service,
+)
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -48,6 +52,11 @@ async def prepare_messages(request: ChatRequest):
                 # Falling back to an ungrounded answer hid the mistyped name
                 # behind a confident reply with no sources attached.
                 raise HTTPException(status_code=404, detail=str(e)) from e
+            except EmbeddingMismatchError as e:
+                # An embedding model that no longer matches the collection.
+                # Uncaught here it left the route raising, so the caller got a
+                # bare 500 with nothing saying what to change.
+                raise HTTPException(status_code=422, detail=str(e)) from e
 
     system_content = (
         RAG_SYSTEM_PROMPT.format(context=context)

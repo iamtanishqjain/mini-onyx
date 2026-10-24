@@ -16,6 +16,10 @@ class CollectionNotFoundError(LookupError):
     """Raised for a collection name nothing has ever been ingested into."""
 
 
+class EmbeddingMismatchError(ValueError):
+    """Raised when a collection and the current embedding model disagree."""
+
+
 # ── Simple vector store (pure Python, no deps) ───────────────────────────────
 
 class SimpleVectorStore:
@@ -81,7 +85,7 @@ class SimpleVectorStore:
         # different embedding model. zip would compare the shared prefix and
         # return a plausible-looking but meaningless score.
         if len(a) != len(b):
-            raise ValueError(
+            raise EmbeddingMismatchError(
                 f"embedding length {len(b)} does not match the query's {len(a)}; "
                 "the collection was built with a different embedding model"
             )
