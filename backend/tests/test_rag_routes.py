@@ -12,6 +12,26 @@ def empty_store(monkeypatch):
     monkeypatch.setattr(rag_routes.rag_service, "list_collections", lambda: [])
 
 
+@pytest.fixture
+def store(monkeypatch, tmp_path):
+    """A real service on a temp dir, with a stub embedder of a chosen width."""
+    from app.core import config
+    from services.rag_service import RAGService
+
+    monkeypatch.setattr(config.settings, "chroma_persist_dir", str(tmp_path))
+    service = RAGService()
+    monkeypatch.setattr(rag_routes, "rag_service", service)
+
+    def install(dimensions=1):
+        async def embed(text):
+            return [float(len(text))] + [0.0] * (dimensions - 1)
+
+        monkeypatch.setattr("services.rag_service.ollama_service.embed", embed)
+        return service
+
+    return install
+
+
 def test_an_unsupported_extension_is_rejected():
     response = client.post(
         "/rag/ingest",
@@ -153,3 +173,31 @@ def test_reingesting_a_file_replaces_its_chunks_rather_than_duplicating(monkeypa
 
     stored = service.store.collections["docs"]
     assert len({c["document"] for c in stored}) == len(stored), "chunks were duplicated"
+
+
+def test_querying_an_unknown_collection_is_a_404(store):
+    # It used to answer 200 with no results, which the caller could not tell
+    # apart from a collection that had nothing to match.
+    store()
+
+    response = client.post(
+        "/rag/query", json={"query": "hello", "collection_name": "typo"}
+    )
+
+    assert response.status_code == 404
+    assert "typo" in response.json()["detail"]
+
+
+def test_an_unknown_collection_is_not_embedded(store, monkeypatch):
+    store()
+    calls = []
+
+    async def embed(text):
+        calls.append(text)
+        return [1.0]
+
+    monkeypatch.setattr("services.rag_service.ollama_service.embed", embed)
+
+    client.post("/rag/query", json={"query": "hello", "collection_name": "typo"})
+
+    assert calls == []

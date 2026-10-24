@@ -6,7 +6,7 @@ from fastapi.responses import StreamingResponse
 from app.core.config import settings
 from schemas.schemas import ChatRequest, ChatResponse
 from services.ollama_service import ollama_service
-from services.rag_service import rag_service
+from services.rag_service import CollectionNotFoundError, rag_service
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -38,11 +38,16 @@ async def prepare_messages(request: ChatRequest):
             "",
         )
         if user_query:
-            context, source_chunks = await rag_service.build_context(
-                query_text=user_query,
-                collection_name=request.collection_name,
-                top_k=settings.rag_top_k,
-            )
+            try:
+                context, source_chunks = await rag_service.build_context(
+                    query_text=user_query,
+                    collection_name=request.collection_name,
+                    top_k=settings.rag_top_k,
+                )
+            except CollectionNotFoundError as e:
+                # Falling back to an ungrounded answer hid the mistyped name
+                # behind a confident reply with no sources attached.
+                raise HTTPException(status_code=404, detail=str(e)) from e
 
     system_content = (
         RAG_SYSTEM_PROMPT.format(context=context)

@@ -12,6 +12,10 @@ from services.ollama_service import ollama_service
 logger = logging.getLogger(__name__)
 
 
+class CollectionNotFoundError(LookupError):
+    """Raised for a collection name nothing has ever been ingested into."""
+
+
 # ── Simple vector store (pure Python, no deps) ───────────────────────────────
 
 class SimpleVectorStore:
@@ -210,6 +214,11 @@ class RAGService:
 
     async def query(self, query_text, collection_name, top_k=5) -> list[DocumentChunk]:
         collection_name = sanitize_collection_name(collection_name)
+        # A name that was never ingested into used to return no results, which
+        # the caller could not tell apart from a collection that simply had
+        # nothing to match. Checked before embedding, so a typo costs no call.
+        if collection_name not in self.store.collections:
+            raise CollectionNotFoundError(f"Collection '{collection_name}' not found.")
         query_emb = await ollama_service.embed(query_text)
         results = self.store.query(collection_name, query_emb, top_k)
         return [

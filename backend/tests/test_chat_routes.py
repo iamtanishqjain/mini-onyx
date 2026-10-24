@@ -137,3 +137,27 @@ def test_a_backend_failure_is_a_500(monkeypatch):
 
     assert response.status_code == 500
     assert "Ollama error" in response.json()["detail"]
+
+
+def test_rag_against_an_unknown_collection_is_a_404(monkeypatch):
+    # It used to answer from general knowledge with no sources, so a mistyped
+    # collection name looked like a confident grounded reply.
+    from app.routers import chat
+    from services.rag_service import CollectionNotFoundError
+
+    async def build_context(query_text, collection_name, top_k):
+        raise CollectionNotFoundError(f"Collection '{collection_name}' not found.")
+
+    monkeypatch.setattr(chat.rag_service, "build_context", build_context)
+
+    response = client.post(
+        "/chat/",
+        json={
+            "messages": [{"role": "user", "content": "hi"}],
+            "use_rag": True,
+            "collection_name": "typo",
+        },
+    )
+
+    assert response.status_code == 404
+    assert "typo" in response.json()["detail"]

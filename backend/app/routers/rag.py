@@ -9,7 +9,7 @@ from schemas.schemas import (
     QueryRequest,
     QueryResponse,
 )
-from services.rag_service import rag_service
+from services.rag_service import CollectionNotFoundError, rag_service
 
 router = APIRouter(prefix="/rag", tags=["rag"])
 
@@ -81,6 +81,8 @@ async def query_documents(request: QueryRequest):
             collection_name=request.collection_name,
             top_k=request.top_k,
         )
+    except CollectionNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Query failed: {e}") from e
 
