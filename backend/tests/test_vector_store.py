@@ -112,3 +112,37 @@ def test_removing_an_unknown_source_changes_nothing(tmp_path):
 
     assert store.remove_source("docs", "nope.pdf") == 0
     assert len(store.collections["docs"]) == 1
+
+
+def test_a_zero_query_vector_scores_everything_zero(tmp_path):
+    store = SimpleVectorStore(str(tmp_path))
+    # The query norm is computed once in query() now, so the zero guard that
+    # used to sit per chunk has to still hold for the whole scoring pass.
+    store.add(
+        name="docs",
+        ids=["1", "2"],
+        embeddings=[[1.0, 0.0], [0.0, 1.0]],
+        documents=["a", "b"],
+        metadatas=[{"source": "a.txt"}, {"source": "b.txt"}],
+    )
+
+    results = store.query("docs", [0.0, 0.0], top_k=5)
+
+    assert [score for _, score in results] == [0.0, 0.0]
+
+
+def test_scores_are_unchanged_by_the_hoisted_norm(tmp_path):
+    store = SimpleVectorStore(str(tmp_path))
+    # cos between [3,4] (norm 5) and [1,0] is 3/5, and with [0,1] is 4/5.
+    store.add(
+        name="docs",
+        ids=["1", "2"],
+        embeddings=[[1.0, 0.0], [0.0, 1.0]],
+        documents=["a", "b"],
+        metadatas=[{"source": "a.txt"}, {"source": "b.txt"}],
+    )
+
+    scores = {item["document"]: score for item, score in store.query("docs", [3.0, 4.0], 5)}
+
+    assert scores["a"] == pytest.approx(0.6)
+    assert scores["b"] == pytest.approx(0.8)

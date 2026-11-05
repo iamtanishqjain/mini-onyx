@@ -80,7 +80,7 @@ class SimpleVectorStore:
             self._save(name)
         return removed
 
-    def _cosine_similarity(self, a: list[float], b: list[float]) -> float:
+    def _cosine_similarity(self, a: list[float], b: list[float], norm_a: float) -> float:
         # Vectors of different lengths mean the collection was built with a
         # different embedding model. zip would compare the shared prefix and
         # return a plausible-looking but meaningless score.
@@ -90,7 +90,6 @@ class SimpleVectorStore:
                 "the collection was built with a different embedding model"
             )
         dot = sum(x * y for x, y in zip(a, b, strict=True))
-        norm_a = math.sqrt(sum(x * x for x in a))
         norm_b = math.sqrt(sum(x * x for x in b))
         if norm_a == 0 or norm_b == 0:
             return 0.0
@@ -100,8 +99,11 @@ class SimpleVectorStore:
         col = self.collections.get(name, [])
         if not col:
             return []
+        # The query vector is the same for every chunk, so its norm is computed
+        # once here rather than per chunk inside the scoring loop.
+        norm_query = math.sqrt(sum(x * x for x in query_embedding))
         scored = [
-            (item, self._cosine_similarity(query_embedding, item["embedding"]))
+            (item, self._cosine_similarity(query_embedding, item["embedding"], norm_query))
             for item in col
         ]
         scored.sort(key=lambda x: x[1], reverse=True)
