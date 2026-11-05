@@ -69,7 +69,10 @@ def test_listing_collections_is_empty_rather_than_failing(empty_store):
 
 
 def test_deleting_an_unknown_collection_is_a_404(monkeypatch):
-    monkeypatch.setattr(rag_routes.rag_service, "delete_collection", lambda name: False)
+    async def missing(name):
+        return False
+
+    monkeypatch.setattr(rag_routes.rag_service, "delete_collection", missing)
 
     response = client.delete("/rag/collections/does-not-exist")
 

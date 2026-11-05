@@ -119,7 +119,7 @@ async def list_collections():
 @router.delete("/collections/{collection_name}")
 async def delete_collection(collection_name: str):
     """Delete a collection and all its documents."""
-    success = rag_service.delete_collection(collection_name)
+    success = await rag_service.delete_collection(collection_name)
     if not success:
         raise HTTPException(status_code=404, detail=f"Collection '{collection_name}' not found.")
     return {"message": f"Collection '{collection_name}' deleted successfully."}

@@ -29,7 +29,8 @@ def test_path_separators_cannot_escape_the_store():
     assert ".." not in sanitize_collection_name("../../etc/passwd")
 
 
-def test_a_collection_can_be_deleted_by_the_name_it_was_created_with(service):
+@pytest.mark.asyncio
+async def test_a_collection_can_be_deleted_by_the_name_it_was_created_with(service):
     # Ingest stores it sanitized. Delete used to receive the raw name and miss.
     service.store.add(
         name=sanitize_collection_name("my docs"),
@@ -39,4 +40,4 @@ def test_a_collection_can_be_deleted_by_the_name_it_was_created_with(service):
         metadatas=[{"source": "a.txt"}],
     )
 
-    assert service.delete_collection("my docs") is True
+    assert await service.delete_collection("my docs") is True

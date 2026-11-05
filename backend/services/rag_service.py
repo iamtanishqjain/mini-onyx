@@ -1,7 +1,9 @@
+import asyncio
 import json
 import logging
 import math
 import os
+import threading
 import uuid
 from pathlib import Path
 
@@ -29,6 +31,10 @@ class SimpleVectorStore:
         self.persist_dir = Path(persist_dir)
         self.persist_dir.mkdir(parents=True, exist_ok=True)
         self.collections: dict = {}
+        # Writes run off the event loop thread, so they are serialized here.
+        # Readers need no lock: a write publishes by rebinding the collection,
+        # so a query holds whichever list it picked up.
+        self._lock = threading.Lock()
         self._load_all()
 
     def _collection_path(self, name: str) -> Path:
@@ -80,20 +86,23 @@ class SimpleVectorStore:
         return [c for c in col if c.get("metadata", {}).get("source") != source]
 
     def add(self, name: str, ids, embeddings, documents, metadatas):
-        self.get_or_create(name).extend(self._rows(ids, embeddings, documents, metadatas))
-        self._save(name)
+        rows = self._rows(ids, embeddings, documents, metadatas)
+        with self._lock:
+            self.collections[name] = self.get_or_create(name) + rows
+            self._save(name)
 
     def remove_source(self, name: str, source: str) -> int:
         """Drop every chunk that came from one source file. Returns how many."""
-        col = self.collections.get(name)
-        if not col:
-            return 0
-        kept = self._without_source(col, source)
-        removed = len(col) - len(kept)
-        if removed:
-            self.collections[name] = kept
-            self._save(name)
-        return removed
+        with self._lock:
+            col = self.collections.get(name)
+            if not col:
+                return 0
+            kept = self._without_source(col, source)
+            removed = len(col) - len(kept)
+            if removed:
+                self.collections[name] = kept
+                self._save(name)
+            return removed
 
     def replace_source(self, name: str, source: str, ids, embeddings, documents, metadatas):
         """Swap one source file's chunks for a new set, in a single save.
@@ -103,8 +112,9 @@ class SimpleVectorStore:
         the new ones were not stored yet.
         """
         rows = self._rows(ids, embeddings, documents, metadatas)
-        self.collections[name] = self._without_source(self.get_or_create(name), source) + rows
-        self._save(name)
+        with self._lock:
+            self.collections[name] = self._without_source(self.get_or_create(name), source) + rows
+            self._save(name)
 
     def _cosine_similarity(self, a: list[float], b: list[float], norm_a: float) -> float:
         # Vectors of different lengths mean the collection was built with a
@@ -142,13 +152,14 @@ class SimpleVectorStore:
         ]
 
     def delete_collection(self, name: str) -> bool:
-        if name in self.collections:
-            del self.collections[name]
-            path = self._collection_path(name)
-            if path.exists():
-                path.unlink()
-            return True
-        return False
+        with self._lock:
+            if name in self.collections:
+                del self.collections[name]
+                path = self._collection_path(name)
+                if path.exists():
+                    path.unlink()
+                return True
+            return False
 
 
 # ── Text helpers ─────────────────────────────────────────────────────────────
@@ -234,7 +245,11 @@ class RAGService:
         # Re-uploading a file replaces its chunks. Appending them left the old
         # copy in place, so retrieval returned the same passage twice and spent
         # the context window saying it.
-        self.store.replace_source(
+        # Writing the collection is seconds of work on a large one, all of it
+        # serializing and writing a file, so it runs off the event loop instead
+        # of stalling every other request for the duration.
+        await asyncio.to_thread(
+            self.store.replace_source,
             name=collection_name,
             source=filename,
             ids=[str(uuid.uuid4()) for _ in chunks],
@@ -276,8 +291,12 @@ class RAGService:
     def list_collections(self):
         return self.store.list_collections()
 
-    def delete_collection(self, name):
-        return self.store.delete_collection(sanitize_collection_name(name))
+    async def delete_collection(self, name):
+        # Takes the same lock the writes do, so on the loop thread it would
+        # stall every other request until a save in progress finished.
+        return await asyncio.to_thread(
+            self.store.delete_collection, sanitize_collection_name(name)
+        )
 
 
 rag_service = RAGService()

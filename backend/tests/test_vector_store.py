@@ -1,4 +1,6 @@
+import asyncio
 import json
+import time
 
 import pytest
 
@@ -234,3 +236,75 @@ def test_a_value_that_cannot_be_saved_leaves_no_temporary_file(tmp_path):
         )
 
     assert list(tmp_path.glob("*.tmp")) == []
+
+
+@pytest.mark.asyncio
+async def test_saving_a_collection_does_not_stall_the_event_loop(tmp_path, monkeypatch):
+    # Writing a large collection is seconds of work. On the loop thread it
+    # stalls every other request for the whole write.
+    from app.core import config
+    from services.rag_service import RAGService
+
+    monkeypatch.setattr(config.settings, "chroma_persist_dir", str(tmp_path))
+    service = RAGService()
+
+    async def embed(text):
+        return [1.0]
+
+    monkeypatch.setattr("services.rag_service.ollama_service.embed", embed)
+    monkeypatch.setattr(SimpleVectorStore, "_save", lambda self, name: time.sleep(0.3))
+
+    ticks = 0
+
+    async def ticker():
+        nonlocal ticks
+        while True:
+            await asyncio.sleep(0.01)
+            ticks += 1
+
+    task = asyncio.create_task(ticker())
+    await service.ingest_document("report.txt", b"hello there", "docs")
+    task.cancel()
+
+    assert ticks > 5, "the event loop was blocked for the whole save"
+
+
+@pytest.mark.asyncio
+async def test_deleting_a_collection_does_not_stall_the_event_loop(tmp_path, monkeypatch):
+    # delete takes the same lock the writes do, so running it on the loop
+    # thread stalled every request until a save in progress finished.
+    from app.core import config
+    from services.rag_service import RAGService
+
+    monkeypatch.setattr(config.settings, "chroma_persist_dir", str(tmp_path))
+    service = RAGService()
+
+    async def embed(text):
+        return [1.0]
+
+    monkeypatch.setattr("services.rag_service.ollama_service.embed", embed)
+    service.store.add(
+        name="other",
+        ids=["1"],
+        embeddings=[[1.0]],
+        documents=["x"],
+        metadatas=[{"source": "x.txt"}],
+    )
+    monkeypatch.setattr(SimpleVectorStore, "_save", lambda self, name: time.sleep(0.3))
+
+    ticks = 0
+
+    async def ticker():
+        nonlocal ticks
+        while True:
+            await asyncio.sleep(0.01)
+            ticks += 1
+
+    task = asyncio.create_task(ticker())
+    ingest = asyncio.create_task(service.ingest_document("a.txt", b"hello", "docs"))
+    await asyncio.sleep(0.05)
+    await service.delete_collection("other")
+    await ingest
+    task.cancel()
+
+    assert ticks > 5, "the event loop was blocked waiting on the write lock"
