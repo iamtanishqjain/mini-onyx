@@ -314,3 +314,27 @@ def test_a_collection_can_be_queried_by_the_name_it_was_created_with(store):
 
     assert response.status_code == 200
     assert len(response.json()["results"]) == 1
+
+
+def test_an_oversized_upload_is_rejected_before_it_is_read(monkeypatch):
+    # The cap exists to bound what one request allocates, so it has to be
+    # applied before read() pulls the whole body into memory.
+    # Starlette's class, which is what the route is handed at runtime.
+    from starlette.datastructures import UploadFile
+
+    from app.core import config
+
+    monkeypatch.setattr(config.settings, "max_upload_mb", 1)
+
+    async def refuse(self, size=-1):
+        raise AssertionError("the body was read before the size was checked")
+
+    monkeypatch.setattr(UploadFile, "read", refuse)
+
+    response = client.post(
+        "/rag/ingest",
+        files={"file": ("big.txt", b"x" * (2 * 1024 * 1024), "text/plain")},
+    )
+
+    assert response.status_code == 413
+    assert "1 MB limit" in response.json()["detail"]

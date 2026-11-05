@@ -38,18 +38,24 @@ async def ingest_document(
             detail=f"Unsupported file type '{ext}'. Supported: {', '.join(SUPPORTED_EXTENSIONS)}",
         )
 
+    # The whole upload is held in memory to be parsed, so cap it rather than
+    # letting one request decide how much the process allocates.
+    max_bytes = settings.max_upload_mb * 1024 * 1024
+    oversized = f"File is larger than the {settings.max_upload_mb} MB limit."
+
+    # The multipart parser sets size, so the cap can be applied before read()
+    # allocates the body. Checking it afterwards meant a 12 MB upload was held
+    # in memory in full only to be rejected against a 1 MB limit.
+    if file.size is not None and file.size > max_bytes:
+        raise HTTPException(status_code=413, detail=oversized)
+
     file_bytes = await file.read()
     if not file_bytes:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
-    # The whole upload is held in memory to be parsed, so cap it rather than
-    # letting one request decide how much the process allocates.
-    max_bytes = settings.max_upload_mb * 1024 * 1024
+    # A parser that reports no size still has to be bounded.
     if len(file_bytes) > max_bytes:
-        raise HTTPException(
-            status_code=413,
-            detail=f"File is larger than the {settings.max_upload_mb} MB limit.",
-        )
+        raise HTTPException(status_code=413, detail=oversized)
 
     try:
         col_name, chunks_added = await rag_service.ingest_document(
