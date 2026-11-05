@@ -146,3 +146,74 @@ def test_scores_are_unchanged_by_the_hoisted_norm(tmp_path):
 
     assert scores["a"] == pytest.approx(0.6)
     assert scores["b"] == pytest.approx(0.8)
+
+
+def test_replacing_a_source_writes_the_collection_once(tmp_path, monkeypatch):
+    # Removing then adding wrote the whole file twice per re-ingest.
+    store = SimpleVectorStore(str(tmp_path))
+    store.add(
+        name="docs",
+        ids=["1"],
+        embeddings=[[1.0]],
+        documents=["old"],
+        metadatas=[{"source": "a.txt"}],
+    )
+
+    saves = []
+    original = SimpleVectorStore._save
+    monkeypatch.setattr(
+        SimpleVectorStore,
+        "_save",
+        lambda self, name: (saves.append(name), original(self, name))[1],
+    )
+
+    store.replace_source(
+        name="docs",
+        source="a.txt",
+        ids=["2"],
+        embeddings=[[1.0]],
+        documents=["new"],
+        metadatas=[{"source": "a.txt"}],
+    )
+
+    assert saves == ["docs"]
+    assert [c["document"] for c in store.collections["docs"]] == ["new"]
+
+
+def test_replacing_a_source_leaves_other_sources_alone(tmp_path):
+    store = SimpleVectorStore(str(tmp_path))
+    store.add(
+        name="docs",
+        ids=["1", "2"],
+        embeddings=[[1.0], [1.0]],
+        documents=["from a", "from b"],
+        metadatas=[{"source": "a.txt"}, {"source": "b.txt"}],
+    )
+
+    store.replace_source(
+        name="docs",
+        source="a.txt",
+        ids=["3"],
+        embeddings=[[1.0]],
+        documents=["new a"],
+        metadatas=[{"source": "a.txt"}],
+    )
+
+    assert sorted(c["document"] for c in store.collections["docs"]) == ["from b", "new a"]
+
+
+def test_a_short_embeddings_list_stores_nothing(tmp_path):
+    # zip(strict=True) raises only after yielding the common prefix, so the
+    # chunks were appended one by one and the first few stayed behind.
+    store = SimpleVectorStore(str(tmp_path))
+
+    with pytest.raises(ValueError):
+        store.add(
+            name="docs",
+            ids=["1", "2", "3"],
+            embeddings=[[1.0]],
+            documents=["a", "b", "c"],
+            metadatas=[{"source": "a.txt"}] * 3,
+        )
+
+    assert store.collections.get("docs", []) == []

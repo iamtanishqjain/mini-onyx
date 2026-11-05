@@ -60,12 +60,23 @@ class SimpleVectorStore:
             self.collections[name] = []
         return self.collections[name]
 
-    def add(self, name: str, ids, embeddings, documents, metadatas):
-        col = self.get_or_create(name)
+    @staticmethod
+    def _rows(ids, embeddings, documents, metadatas) -> list[dict]:
         # strict, so a short embeddings list raises instead of zip quietly
         # truncating and storing fewer chunks than the document produced.
-        for id_, emb, doc, meta in zip(ids, embeddings, documents, metadatas, strict=True):
-            col.append({"id": id_, "embedding": emb, "document": doc, "metadata": meta})
+        # Built before anything is stored, so a mismatch leaves the collection
+        # as it was instead of half updated.
+        return [
+            {"id": id_, "embedding": emb, "document": doc, "metadata": meta}
+            for id_, emb, doc, meta in zip(ids, embeddings, documents, metadatas, strict=True)
+        ]
+
+    @staticmethod
+    def _without_source(col: list[dict], source: str) -> list[dict]:
+        return [c for c in col if c.get("metadata", {}).get("source") != source]
+
+    def add(self, name: str, ids, embeddings, documents, metadatas):
+        self.get_or_create(name).extend(self._rows(ids, embeddings, documents, metadatas))
         self._save(name)
 
     def remove_source(self, name: str, source: str) -> int:
@@ -73,12 +84,23 @@ class SimpleVectorStore:
         col = self.collections.get(name)
         if not col:
             return 0
-        kept = [c for c in col if c.get("metadata", {}).get("source") != source]
+        kept = self._without_source(col, source)
         removed = len(col) - len(kept)
         if removed:
             self.collections[name] = kept
             self._save(name)
         return removed
+
+    def replace_source(self, name: str, source: str, ids, embeddings, documents, metadatas):
+        """Swap one source file's chunks for a new set, in a single save.
+
+        Removing and then adding wrote the whole collection to disk twice per
+        re-ingest, and between the two writes the old chunks were gone while
+        the new ones were not stored yet.
+        """
+        rows = self._rows(ids, embeddings, documents, metadatas)
+        self.collections[name] = self._without_source(self.get_or_create(name), source) + rows
+        self._save(name)
 
     def _cosine_similarity(self, a: list[float], b: list[float], norm_a: float) -> float:
         # Vectors of different lengths mean the collection was built with a
@@ -208,9 +230,9 @@ class RAGService:
         # Re-uploading a file replaces its chunks. Appending them left the old
         # copy in place, so retrieval returned the same passage twice and spent
         # the context window saying it.
-        self.store.remove_source(collection_name, filename)
-        self.store.add(
+        self.store.replace_source(
             name=collection_name,
+            source=filename,
             ids=[str(uuid.uuid4()) for _ in chunks],
             embeddings=embeddings,
             documents=chunks,
