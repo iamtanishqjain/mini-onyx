@@ -217,3 +217,20 @@ def test_a_short_embeddings_list_stores_nothing(tmp_path):
         )
 
     assert store.collections.get("docs", []) == []
+
+
+def test_a_value_that_cannot_be_saved_leaves_no_temporary_file(tmp_path):
+    # Streaming into the file wrote part of the collection before hitting the
+    # bad value, leaving a .tmp file holding a truncated collection.
+    store = SimpleVectorStore(str(tmp_path))
+
+    with pytest.raises(TypeError):
+        store.add(
+            name="docs",
+            ids=["1"],
+            embeddings=[object()],
+            documents=["hello"],
+            metadatas=[{"source": "a.txt"}],
+        )
+
+    assert list(tmp_path.glob("*.tmp")) == []
