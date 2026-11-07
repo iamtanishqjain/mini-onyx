@@ -13,6 +13,16 @@ from services.ollama_service import ollama_service
 
 logger = logging.getLogger(__name__)
 
+# The one list of what can be ingested, and the one way to read an extension
+# off a filename. The route used to keep its own copy of both, and they
+# disagreed: a file named ".txt" passed the route's check and then failed the
+# parser's, since rsplit("." ) finds "txt" where Path().suffix finds nothing.
+SUPPORTED_EXTENSIONS = (".pdf", ".docx", ".txt", ".md")
+
+
+def file_extension(filename: str) -> str:
+    return Path(filename).suffix.lower()
+
 
 class CollectionNotFoundError(LookupError):
     """Raised for a collection name nothing has ever been ingested into."""
@@ -205,9 +215,12 @@ def parse_txt(file_bytes: bytes) -> str:
 
 
 def parse_file(filename: str, file_bytes: bytes) -> str:
-    ext = Path(filename).suffix.lower()
-    if ext not in (".pdf", ".docx", ".txt", ".md"):
-        raise ValueError(f"Unsupported file type: {ext}")
+    ext = file_extension(filename)
+    if ext not in SUPPORTED_EXTENSIONS:
+        raise ValueError(
+            f"Unsupported file type for '{filename}'. "
+            f"Supported: {', '.join(SUPPORTED_EXTENSIONS)}"
+        )
 
     parser = {".pdf": parse_pdf, ".docx": parse_docx}.get(ext, parse_txt)
     try:

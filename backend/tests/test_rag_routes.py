@@ -341,3 +341,29 @@ def test_an_oversized_upload_is_rejected_before_it_is_read(monkeypatch):
 
     assert response.status_code == 413
     assert "1 MB limit" in response.json()["detail"]
+
+
+def test_a_dotfile_named_after_an_extension_is_rejected_by_the_route():
+    # The route read the extension with rsplit and found "txt", while the
+    # parser read it with Path().suffix and found nothing. So this got past
+    # the route and failed inside the service as "Unsupported file type: ".
+    response = client.post(
+        "/rag/ingest", files={"file": (".txt", b"hello", "text/plain")}
+    )
+
+    assert response.status_code == 400
+    assert ".txt" in response.json()["detail"]
+
+
+def test_the_route_and_the_parser_agree_on_what_is_supported():
+    from services.rag_service import SUPPORTED_EXTENSIONS, file_extension, parse_file
+
+    for name in [".txt", "notes.txt", "a.b.md", "UPPER.TXT", "archive.tar.gz", "README"]:
+        accepted = file_extension(name) in SUPPORTED_EXTENSIONS
+        try:
+            parse_file(name, b"hello")
+            parser_accepted = True
+        except ValueError as e:
+            parser_accepted = "Unsupported file type" not in str(e)
+
+        assert accepted == parser_accepted, name

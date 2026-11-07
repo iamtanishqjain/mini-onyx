@@ -10,14 +10,14 @@ from schemas.schemas import (
     QueryResponse,
 )
 from services.rag_service import (
+    SUPPORTED_EXTENSIONS,
     CollectionNotFoundError,
     EmbeddingMismatchError,
+    file_extension,
     rag_service,
 )
 
 router = APIRouter(prefix="/rag", tags=["rag"])
-
-SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".txt", ".md"}
 
 
 @router.post("/ingest", response_model=IngestResponse)
@@ -30,12 +30,14 @@ async def ingest_document(
     It gets parsed, chunked, embedded via Ollama, and stored in the vector store.
     """
     filename = file.filename or "unknown"
-    ext = "." + filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
 
-    if ext not in SUPPORTED_EXTENSIONS:
+    if file_extension(filename) not in SUPPORTED_EXTENSIONS:
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported file type '{ext}'. Supported: {', '.join(SUPPORTED_EXTENSIONS)}",
+            detail=(
+                f"Unsupported file type for '{filename}'. "
+                f"Supported: {', '.join(SUPPORTED_EXTENSIONS)}"
+            ),
         )
 
     # The whole upload is held in memory to be parsed, so cap it rather than
