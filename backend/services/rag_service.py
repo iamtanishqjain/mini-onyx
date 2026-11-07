@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 import logging
 import math
@@ -241,7 +242,13 @@ def sanitize_collection_name(name: str) -> str:
     "my docs" the caller originally sent.
     """
     safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in name)
-    return safe[:63] or "default"
+    if len(safe) <= 63:
+        return safe or "default"
+    # Truncating alone mapped every name sharing a 63-character prefix onto the
+    # same collection, so two long names silently pooled their chunks and a
+    # query against either returned both. The digest comes from the name the
+    # caller sent, so the mapping stays the same across runs.
+    return f"{safe[:54]}-{hashlib.sha256(name.encode()).hexdigest()[:8]}"
 
 
 class RAGService:
