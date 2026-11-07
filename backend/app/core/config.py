@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     chunk_size: int = Field(default=500, ge=1)
     chunk_overlap: int = Field(default=50, ge=0)
     rag_top_k: int = Field(default=5, ge=1)
+    # Ollama has no batch embed endpoint, so a document is one request per
+    # chunk. This bounds how many of them are in flight for a single document,
+    # not for the process, so N uploads at once can reach N times this.
+    embed_concurrency: int = Field(default=4, ge=1, le=32)
 
     @model_validator(mode="after")
     def _overlap_fits_in_a_chunk(self):

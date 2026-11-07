@@ -1,3 +1,5 @@
+import asyncio
+
 import httpx
 import pytest
 
@@ -74,3 +76,73 @@ async def test_is_available_is_true_on_a_200(respond):
     respond({"models": []})
 
     assert await ollama_service.is_available() is True
+
+
+@pytest.mark.asyncio
+async def test_embed_batch_sends_several_at_once(monkeypatch):
+    # One request per chunk, strictly sequential, cost the sum of every round
+    # trip: 16.8s for 359 chunks at 40ms against 4.2s four at a time.
+    from app.core import config
+
+    monkeypatch.setattr(config.settings, "embed_concurrency", 4)
+    in_flight, peak = 0, 0
+
+    async def embed(text):
+        nonlocal in_flight, peak
+        in_flight += 1
+        peak = max(peak, in_flight)
+        await asyncio.sleep(0.01)
+        in_flight -= 1
+        return [1.0]
+
+    monkeypatch.setattr(ollama_service, "embed", embed)
+
+    await ollama_service.embed_batch([str(i) for i in range(12)])
+
+    assert peak > 1, "the requests went out one at a time"
+    assert peak <= 4, "the concurrency limit was not respected"
+
+
+@pytest.mark.asyncio
+async def test_embed_batch_stops_the_queue_when_one_call_fails(monkeypatch):
+    from app.core import config
+
+    monkeypatch.setattr(config.settings, "embed_concurrency", 2)
+    started = []
+
+    async def embed(text):
+        started.append(text)
+        await asyncio.sleep(0.01)
+        raise RuntimeError("model gone")
+
+    monkeypatch.setattr(ollama_service, "embed", embed)
+
+    with pytest.raises(RuntimeError, match="model gone"):
+        await ollama_service.embed_batch([str(i) for i in range(20)])
+
+    # The ones still waiting on the semaphore are cancelled, not sent.
+    assert len(started) < 20
+
+
+@pytest.mark.asyncio
+async def test_ingest_embeds_through_embed_batch(monkeypatch, tmp_path):
+    # ingest_document had its own sequential loop, so the helper written for
+    # this job was never used and the two could drift.
+    from app.core import config
+    from services.rag_service import RAGService
+
+    monkeypatch.setattr(config.settings, "chroma_persist_dir", str(tmp_path))
+    service = RAGService()
+    calls = []
+
+    async def embed_batch(texts):
+        calls.append(len(texts))
+        return [[1.0] for _ in texts]
+
+    monkeypatch.setattr("services.rag_service.ollama_service.embed_batch", embed_batch)
+
+    _, chunks_added = await service.ingest_document(
+        "report.txt", b"one sentence. two sentence.", "docs"
+    )
+
+    assert calls == [chunks_added]

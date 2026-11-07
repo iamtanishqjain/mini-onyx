@@ -278,7 +278,7 @@ class RAGService:
         if not raw_text.strip():
             raise ValueError("Could not extract text from document.")
         chunks = split_text(raw_text, settings.chunk_size, settings.chunk_overlap)
-        embeddings = [await ollama_service.embed(c) for c in chunks]
+        embeddings = await ollama_service.embed_batch(chunks)
         # Re-uploading a file replaces its chunks. Appending them left the old
         # copy in place, so retrieval returned the same passage twice and spent
         # the context window saying it.
