@@ -199,7 +199,7 @@ curl -X POST http://localhost:8000/rag/ingest \
 | `GET` | `/health` | Ollama connectivity check |
 | `GET` | `/models/` | Available Ollama models |
 | `POST` | `/rag/query` | Semantic search within a collection |
-| `GET` | `/rag/collections` | List collections with chunk counts |
+| `GET` | `/rag/collections` | List collections with document and chunk counts |
 | `DELETE` | `/rag/collections/{name}` | Remove a collection |
 
 ---

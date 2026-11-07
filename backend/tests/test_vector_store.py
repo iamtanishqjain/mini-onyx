@@ -308,3 +308,45 @@ async def test_deleting_a_collection_does_not_stall_the_event_loop(tmp_path, mon
     task.cancel()
 
     assert ticks > 5, "the event loop was blocked waiting on the write lock"
+
+
+def test_listing_counts_documents_and_chunks_separately(tmp_path):
+    # document_count was len(items), so two uploaded files holding five
+    # chunks between them reported as five documents.
+    store = SimpleVectorStore(str(tmp_path))
+    store.add(
+        name="docs",
+        ids=["1", "2", "3", "4", "5"],
+        embeddings=[[1.0]] * 5,
+        documents=["a1", "a2", "a3", "b1", "b2"],
+        metadatas=[{"source": "a.txt"}] * 3 + [{"source": "b.md"}] * 2,
+    )
+
+    listed = store.list_collections()[0]
+
+    assert listed["document_count"] == 2
+    assert listed["chunk_count"] == 5
+
+
+def malformed_chunk():
+    # Valid JSON that _load_all accepts, with metadata present but null.
+    return {"id": "1", "embedding": [1.0], "document": "hello", "metadata": None}
+
+
+def test_listing_survives_a_chunk_with_no_metadata(tmp_path):
+    (tmp_path / "docs.json").write_text(json.dumps([malformed_chunk()]))
+    store = SimpleVectorStore(str(tmp_path))
+
+    listed = store.list_collections()[0]
+
+    assert listed["chunk_count"] == 1
+    assert listed["document_count"] == 1
+
+
+def test_removing_a_source_survives_a_chunk_with_no_metadata(tmp_path):
+    (tmp_path / "docs.json").write_text(json.dumps([malformed_chunk()]))
+    store = SimpleVectorStore(str(tmp_path))
+
+    # It names no source, so it is not the one being removed and stays put.
+    assert store.remove_source("docs", "a.txt") == 0
+    assert len(store.collections["docs"]) == 1

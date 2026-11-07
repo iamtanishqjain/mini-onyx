@@ -367,3 +367,18 @@ def test_the_route_and_the_parser_agree_on_what_is_supported():
             parser_accepted = "Unsupported file type" not in str(e)
 
         assert accepted == parser_accepted, name
+
+
+def test_the_collections_route_reports_both_counts(store):
+    service = store()
+    service.store.add(
+        name="docs",
+        ids=["1", "2", "3"],
+        embeddings=[[1.0]] * 3,
+        documents=["a1", "a2", "b1"],
+        metadatas=[{"source": "a.txt"}] * 2 + [{"source": "b.md"}],
+    )
+
+    body = client.get("/rag/collections").json()
+
+    assert body["collections"] == [{"name": "docs", "document_count": 2, "chunk_count": 3}]

@@ -25,6 +25,17 @@ def file_extension(filename: str) -> str:
     return Path(filename).suffix.lower()
 
 
+def chunk_source(chunk: dict) -> str | None:
+    """The file a stored chunk came from, or None if it does not say.
+
+    A collection on disk can hold a chunk whose metadata is explicitly null,
+    which is valid JSON and loads fine. chunk.get("metadata", {}) returns that
+    null rather than the default, so reading .get("source") off it raised.
+    """
+    metadata = chunk.get("metadata")
+    return metadata.get("source") if isinstance(metadata, dict) else None
+
+
 class CollectionNotFoundError(LookupError):
     """Raised for a collection name nothing has ever been ingested into."""
 
@@ -94,7 +105,7 @@ class SimpleVectorStore:
 
     @staticmethod
     def _without_source(col: list[dict], source: str) -> list[dict]:
-        return [c for c in col if c.get("metadata", {}).get("source") != source]
+        return [c for c in col if chunk_source(c) != source]
 
     def add(self, name: str, ids, embeddings, documents, metadatas):
         rows = self._rows(ids, embeddings, documents, metadatas)
@@ -157,8 +168,14 @@ class SimpleVectorStore:
         return scored[:top_k]
 
     def list_collections(self):
+        # document_count used to be len(items), which is the chunk count. One
+        # uploaded file reported as 22 documents, so both are named now.
         return [
-            {"name": name, "document_count": len(items)}
+            {
+                "name": name,
+                "document_count": len({chunk_source(c) for c in items}),
+                "chunk_count": len(items),
+            }
             for name, items in self.collections.items()
         ]
 

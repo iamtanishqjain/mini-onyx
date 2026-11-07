@@ -60,7 +60,8 @@ class QueryResponse(BaseModel):
 
 class CollectionInfo(BaseModel):
     name: str
-    document_count: int
+    document_count: int   # distinct source files
+    chunk_count: int      # pieces they were split into
 
 
 class CollectionsResponse(BaseModel):
