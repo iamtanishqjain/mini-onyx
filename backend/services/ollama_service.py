@@ -44,7 +44,10 @@ class OllamaService:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(f"{self.base_url}/api/tags")
             resp.raise_for_status()
-            return resp.json().get("models", [])
+            # `or []` rather than a default, since a null models key returns
+            # the null and the caller then iterates None.
+            models = resp.json().get("models") or []
+            return [m for m in models if isinstance(m, dict)]
 
     # ── Chat (streaming) ────────────────────────────────────────────────────
 
