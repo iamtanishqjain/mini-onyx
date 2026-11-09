@@ -6,6 +6,12 @@ import httpx
 
 from app.core.config import settings
 
+# The compose healthcheck gives /health 5s before it counts as a failure, and
+# it is meant to go unhealthy only if the API itself is down. A backend that
+# accepts the connection and then never answers took 5.5s to give up here, so
+# the probe outlived the window and took the container down with it.
+HEALTH_PROBE_TIMEOUT = 2
+
 
 class OllamaService:
     """Wraps the Ollama REST API for chat and embeddings.
@@ -32,7 +38,7 @@ class OllamaService:
 
     async def is_available(self) -> bool:
         try:
-            async with httpx.AsyncClient(timeout=5) as client:
+            async with httpx.AsyncClient(timeout=HEALTH_PROBE_TIMEOUT) as client:
                 resp = await client.get(f"{self.base_url}/api/tags")
                 return resp.status_code == 200
         except Exception:
