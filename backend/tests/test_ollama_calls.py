@@ -71,12 +71,6 @@ async def test_list_models_returns_the_models(respond):
     assert await ollama_service.list_models() == [{"name": "llama3"}]
 
 
-@pytest.mark.asyncio
-async def test_is_available_is_true_on_a_200(respond):
-    respond({"models": []})
-
-    assert await ollama_service.is_available() is True
-
 
 @pytest.mark.asyncio
 async def test_embed_batch_sends_several_at_once(monkeypatch):

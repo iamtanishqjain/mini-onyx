@@ -10,17 +10,17 @@ client = TestClient(app)
 @pytest.fixture
 def ollama_down(monkeypatch):
     async def unavailable():
-        return False
+        return False, "ConnectError at http://localhost:11434: refused"
 
-    monkeypatch.setattr(ollama_service, "is_available", unavailable)
+    monkeypatch.setattr(ollama_service, "probe", unavailable)
 
 
 @pytest.fixture
 def ollama_up(monkeypatch):
     async def available():
-        return True
+        return True, None
 
-    monkeypatch.setattr(ollama_service, "is_available", available)
+    monkeypatch.setattr(ollama_service, "probe", available)
 
 
 def test_root_points_at_the_docs():
@@ -37,6 +37,7 @@ def test_health_is_ok_when_ollama_answers(ollama_up):
     body = response.json()
     assert body["status"] == "ok"
     assert body["ollama_connected"] is True
+    assert body["ollama_error"] is None
 
 
 def test_health_is_degraded_rather_than_failing_when_ollama_is_down(ollama_down):
@@ -48,6 +49,7 @@ def test_health_is_degraded_rather_than_failing_when_ollama_is_down(ollama_down)
     body = response.json()
     assert body["status"] == "degraded"
     assert body["ollama_connected"] is False
+    assert "refused" in body["ollama_error"]
 
 
 def test_health_reports_the_configured_models(ollama_up):

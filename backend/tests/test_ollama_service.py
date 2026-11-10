@@ -1,3 +1,4 @@
+import httpx
 import pytest
 
 from app.core import config
@@ -25,14 +26,6 @@ def test_the_service_follows_changed_model_names():
 
     assert ollama_service.chat_model == "mistral"
     assert ollama_service.embed_model == "all-minilm"
-
-
-@pytest.mark.asyncio
-async def test_is_available_is_false_when_ollama_cannot_be_reached():
-    # Port 1 is reserved and nothing listens there, so the connection fails.
-    config.settings.ollama_base_url = "http://127.0.0.1:1"
-
-    assert await ollama_service.is_available() is False
 
 
 @pytest.mark.asyncio
@@ -66,7 +59,8 @@ async def test_the_health_probe_gives_up_inside_the_healthcheck_window(monkeypat
 
     try:
         started = time.perf_counter()
-        assert await ollama_service.is_available() is False
+        connected, _ = await ollama_service.probe()
+        assert connected is False
         took = time.perf_counter() - started
     finally:
         listener.close()
@@ -74,3 +68,52 @@ async def test_the_health_probe_gives_up_inside_the_healthcheck_window(monkeypat
             conn.close()
 
     assert took < 4, f"the probe took {took:.2f}s, outliving the 5s healthcheck"
+
+
+@pytest.mark.asyncio
+async def test_the_probe_names_the_transport_failure(monkeypatch):
+    # A bare false read the same for a wrong URL, a name that does not
+    # resolve, a refused connection and an Ollama answering an error. Faked
+    # rather than aimed at a dead port, which refuses on one platform and
+    # hangs until the timeout on another.
+    def refuse(request):
+        raise httpx.ConnectError("[Errno 111] Connection refused")
+
+    original = httpx.AsyncClient
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda *a, **k: original(*a, **{**k, "transport": httpx.MockTransport(refuse)}),
+    )
+    monkeypatch.setattr(config.settings, "ollama_base_url", "http://ollama:11434")
+
+    connected, reason = await ollama_service.probe()
+
+    assert connected is False
+    assert "ConnectError" in reason
+    assert "http://ollama:11434" in reason
+
+
+@pytest.mark.asyncio
+async def test_the_probe_reports_an_error_status_from_ollama(monkeypatch):
+    transport = httpx.MockTransport(lambda request: httpx.Response(503))
+    original = httpx.AsyncClient
+    monkeypatch.setattr(
+        httpx, "AsyncClient", lambda *a, **k: original(*a, **{**k, "transport": transport})
+    )
+
+    connected, reason = await ollama_service.probe()
+
+    assert connected is False
+    assert "answered 503" in reason
+
+
+@pytest.mark.asyncio
+async def test_the_probe_reports_no_reason_when_ollama_answers(monkeypatch):
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, json={"models": []}))
+    original = httpx.AsyncClient
+    monkeypatch.setattr(
+        httpx, "AsyncClient", lambda *a, **k: original(*a, **{**k, "transport": transport})
+    )
+
+    assert await ollama_service.probe() == (True, None)

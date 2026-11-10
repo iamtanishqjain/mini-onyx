@@ -36,13 +36,25 @@ class OllamaService:
 
     # ── Connection check ────────────────────────────────────────────────────
 
-    async def is_available(self) -> bool:
+    async def probe(self) -> tuple[bool, str | None]:
+        """Whether Ollama answers, and what went wrong when it does not.
+
+        /health used to report only a bare false, which reads the same for a
+        wrong OLLAMA_BASE_URL, a host that does not resolve, a refused
+        connection and an Ollama that answers an error. Catching everything
+        is deliberate here: a health endpoint has to answer.
+        """
         try:
             async with httpx.AsyncClient(timeout=HEALTH_PROBE_TIMEOUT) as client:
                 resp = await client.get(f"{self.base_url}/api/tags")
-                return resp.status_code == 200
-        except Exception:
-            return False
+        except httpx.TimeoutException:
+            return False, f"no answer within {HEALTH_PROBE_TIMEOUT}s at {self.base_url}"
+        except Exception as e:
+            return False, f"{type(e).__name__} at {self.base_url}: {e}"
+
+        if resp.status_code != 200:
+            return False, f"{self.base_url} answered {resp.status_code}"
+        return True, None
 
     # ── Available models ────────────────────────────────────────────────────
 

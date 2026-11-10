@@ -85,6 +85,7 @@ class ModelsResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: str
     ollama_connected: bool
+    ollama_error: str | None = None   # why not, when not connected
     ollama_url: str
     chat_model: str
     embed_model: str
