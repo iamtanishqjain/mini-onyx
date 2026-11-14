@@ -168,8 +168,7 @@ Streams a chat response as Server-Sent Events.
   "messages": [{ "role": "user", "content": "Summarize the document" }],
   "model": "llama3",
   "use_rag": true,
-  "collection_name": "my_docs",
-  "stream": true
+  "collection_name": "my_docs"
 }
 ```
 

@@ -267,3 +267,14 @@ def test_not_asking_for_rag_needs_no_collection(monkeypatch):
     response = client.post("/chat/", json={"messages": [{"role": "user", "content": "hi"}]})
 
     assert response.status_code == 200
+
+
+def test_an_unknown_field_is_rejected_rather_than_quietly_ignored():
+    # `stream` used to be declared and never read, so a client turning it off
+    # on the streaming endpoint still got a stream. The endpoint decides.
+    response = client.post(
+        "/chat/",
+        json={"messages": [{"role": "user", "content": "hi"}], "stream": False},
+    )
+
+    assert response.status_code == 422

@@ -382,3 +382,17 @@ def test_the_collections_route_reports_both_counts(store):
     body = client.get("/rag/collections").json()
 
     assert body["collections"] == [{"name": "docs", "document_count": 2, "chunk_count": 3}]
+
+
+def test_a_misspelled_field_is_rejected_rather_than_ignored(store):
+    # Pydantic drops unknown keys, so a misspelled "top_kk" was accepted and
+    # simply never read: the query ran with the default instead.
+    service = store()
+    chunks(service, "docs", [1.0], [1.0], [1.0])
+
+    response = client.post(
+        "/rag/query",
+        json={"query": "hello", "collection_name": "docs", "top_kk": 1},
+    )
+
+    assert response.status_code == 422

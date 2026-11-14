@@ -1,6 +1,18 @@
 from enum import Enum
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+
+class StrictModel(BaseModel):
+    """A request body that refuses fields it does not know.
+
+    Pydantic drops unknown keys by default, so a misspelled collection_name
+    was accepted and ignored, and the answer came back ungrounded with
+    nothing to say the field had not been read.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
 
 # ── Chat ────────────────────────────────────────────────────────────────────
 
@@ -10,19 +22,18 @@ class MessageRole(str, Enum):
     system = "system"
 
 
-class Message(BaseModel):
+class Message(StrictModel):
     role: MessageRole
     content: str
 
 
-class ChatRequest(BaseModel):
+class ChatRequest(StrictModel):
     # A chat with no messages would still reach the model, costing an
     # inference call for a prompt with no user turn in it.
     messages: list[Message] = Field(min_length=1)
     model: str | None = None          # overrides default if provided
     use_rag: bool = False                 # attach retrieved context
     collection_name: str | None = None  # which RAG collection to query
-    stream: bool = True
 
     @model_validator(mode="after")
     def _has_a_question_to_answer(self):
@@ -66,7 +77,7 @@ class IngestResponse(BaseModel):
     message: str
 
 
-class QueryRequest(BaseModel):
+class QueryRequest(StrictModel):
     # Embedding whitespace costs a model call and can only return noise.
     query: str = Field(min_length=1, pattern=r"\S")
     collection_name: str = Field(min_length=1)
