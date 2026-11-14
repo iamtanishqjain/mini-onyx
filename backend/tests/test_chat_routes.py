@@ -185,3 +185,48 @@ def test_rag_with_a_mismatched_embedding_model_is_a_422(monkeypatch):
 
     assert response.status_code == 422
     assert "different embedding model" in response.json()["detail"]
+
+
+def test_a_blank_user_message_is_rejected():
+    # It passed the length check and reached the model anyway, costing an
+    # inference call for a prompt with nothing to answer.
+    response = client.post("/chat/", json={"messages": [{"role": "user", "content": "   "}]})
+
+    assert response.status_code == 422
+
+
+def test_an_empty_user_message_is_rejected():
+    response = client.post("/chat/", json={"messages": [{"role": "user", "content": ""}]})
+
+    assert response.status_code == 422
+
+
+def test_a_conversation_with_only_a_system_turn_is_rejected():
+    response = client.post(
+        "/chat/", json={"messages": [{"role": "system", "content": "be nice"}]}
+    )
+
+    assert response.status_code == 422
+
+
+def test_an_earlier_blank_turn_does_not_block_a_real_question(monkeypatch):
+    # Replaying history that holds a failed turn is legitimate.
+    from app.routers import chat
+
+    async def reply(messages, model=None):
+        return "ok"
+
+    monkeypatch.setattr(chat.ollama_service, "chat", reply)
+
+    response = client.post(
+        "/chat/",
+        json={
+            "messages": [
+                {"role": "user", "content": "hi"},
+                {"role": "assistant", "content": ""},
+                {"role": "user", "content": "what is RAG?"},
+            ]
+        },
+    )
+
+    assert response.status_code == 200

@@ -1,6 +1,6 @@
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 # ── Chat ────────────────────────────────────────────────────────────────────
 
@@ -23,6 +23,16 @@ class ChatRequest(BaseModel):
     use_rag: bool = False                 # attach retrieved context
     collection_name: str | None = None  # which RAG collection to query
     stream: bool = True
+
+    @model_validator(mode="after")
+    def _has_a_question_to_answer(self):
+        # A blank user turn passed the length check and reached the model
+        # anyway, and with use_rag it skipped retrieval silently too, the
+        # empty string being falsy. Earlier turns may be blank: only the
+        # request as a whole has to carry something to answer.
+        if not any(m.role is MessageRole.user and m.content.strip() for m in self.messages):
+            raise ValueError("at least one user message must have content")
+        return self
 
 
 class ChatResponse(BaseModel):
