@@ -76,3 +76,36 @@ def test_text_with_no_usable_separator_is_cut_at_the_window():
     chunks = split_text(doc, chunk_size=500, overlap=50)
 
     assert max(len(c) for c in chunks) >= 400
+
+
+def test_a_byte_order_mark_does_not_enter_the_text():
+    # Windows editors write .txt and .md with one routinely, and it used to
+    # open the first chunk and go into its embedding.
+    from services.rag_service import parse_txt
+
+    note = "Hello world. A note about retrieval."
+
+    assert parse_txt(note.encode("utf-8-sig")) == note
+
+
+def test_a_utf16_file_is_not_ingested_as_noise():
+    from services.rag_service import parse_txt
+
+    note = "Hello world. A note about retrieval."
+
+    assert parse_txt(note.encode("utf-16")) == note
+
+
+def test_utf32_is_not_mistaken_for_utf16():
+    # Its mark starts with UTF-16 LE's two bytes, so order matters.
+    from services.rag_service import parse_txt
+
+    note = "Hello world."
+
+    assert parse_txt(note.encode("utf-32")) == note
+
+
+def test_undecodable_bytes_still_do_not_raise():
+    from services.rag_service import parse_txt
+
+    assert parse_txt(b"\xff\xfe\x00 plain-ish") is not None

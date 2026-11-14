@@ -1,4 +1,5 @@
 import asyncio
+import codecs
 import hashlib
 import json
 import logging
@@ -245,7 +246,28 @@ def parse_docx(file_bytes: bytes) -> str:
     return "\n\n".join(p.text for p in doc.paragraphs if p.text.strip())
 
 
+# UTF-32's marks start with UTF-16's, so they have to be tested first.
+BYTE_ORDER_MARKS = (
+    (codecs.BOM_UTF8, "utf-8-sig"),
+    (codecs.BOM_UTF32_LE, "utf-32"),
+    (codecs.BOM_UTF32_BE, "utf-32"),
+    (codecs.BOM_UTF16_LE, "utf-16"),
+    (codecs.BOM_UTF16_BE, "utf-16"),
+)
+
+
 def parse_txt(file_bytes: bytes) -> str:
+    """Decode a text file, honouring a byte order mark if it carries one.
+
+    Editors on Windows write .txt and .md with a mark routinely. Decoding
+    everything as utf-8 left it in the text as U+FEFF, opening the first
+    chunk and going into its embedding, and a utf-16 file came out as
+    replacement characters: a document of noise, ingested with nothing
+    raised to say so.
+    """
+    for bom, encoding in BYTE_ORDER_MARKS:
+        if file_bytes.startswith(bom):
+            return file_bytes.decode(encoding, errors="replace")
     return file_bytes.decode("utf-8", errors="replace")
 
 
