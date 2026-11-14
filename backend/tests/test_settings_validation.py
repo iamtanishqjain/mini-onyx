@@ -35,3 +35,15 @@ def test_the_defaults_are_valid():
 
     assert s.chunk_size > s.chunk_overlap >= 0
     assert s.max_upload_mb >= 1
+
+
+def test_rag_top_k_cannot_exceed_the_query_routes_ceiling():
+    # A RAG chat reads this setting instead of QueryRequest.top_k, so an
+    # unbounded value here was a way round that field's limit of 20.
+    # RAG_TOP_K=400 built a 212,000 character system prompt.
+    with pytest.raises(ValidationError):
+        Settings(rag_top_k=400)
+
+
+def test_rag_top_k_at_the_ceiling_is_accepted():
+    assert Settings(rag_top_k=20).rag_top_k == 20

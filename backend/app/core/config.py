@@ -28,7 +28,11 @@ class Settings(BaseSettings):
     # ingestion rather than failing, so these are bounded here.
     chunk_size: int = Field(default=500, ge=1)
     chunk_overlap: int = Field(default=50, ge=0)
-    rag_top_k: int = Field(default=5, ge=1)
+    # The same ceiling QueryRequest.top_k carries. A RAG chat reads this
+    # setting rather than that field, so without it the chat path had no
+    # ceiling at all: RAG_TOP_K=400 built a 212,000 character system prompt,
+    # well past what a local model will hold.
+    rag_top_k: int = Field(default=5, ge=1, le=20)
     # Ollama has no batch embed endpoint, so a document is one request per
     # chunk. This bounds how many of them are in flight for a single document,
     # not for the process, so N uploads at once can reach N times this.
