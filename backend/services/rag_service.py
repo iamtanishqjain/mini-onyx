@@ -192,16 +192,33 @@ class SimpleVectorStore:
 
 # ── Text helpers ─────────────────────────────────────────────────────────────
 
+# Most meaningful boundary first: paragraph, then sentence, then line.
+SEPARATORS = ("\n\n", ".\n", ". ", "\n")
+
+
+def _split_point(text: str, start: int, window_end: int, chunk_size: int) -> int:
+    """Where a chunk starting at `start` should end.
+
+    A separator is only taken if it leaves at least half a chunk behind. The
+    search used to accept the first separator type found anywhere in the
+    window, so a paragraph break ten characters in beat a sentence break four
+    hundred characters later. A document of short headings came apart into
+    fragments too small to retrieve anything from, each still costing its own
+    embedding call.
+    """
+    for sep in SEPARATORS:
+        idx = text.rfind(sep, start, window_end)
+        if idx != -1 and (idx + len(sep)) - start >= chunk_size // 2:
+            return idx + len(sep)
+    return window_end
+
+
 def split_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]:
     chunks, start = [], 0
     while start < len(text):
         end = start + chunk_size
         if end < len(text):
-            for sep in ["\n\n", ".\n", ". ", "\n"]:
-                idx = text.rfind(sep, start, end)
-                if idx != -1:
-                    end = idx + len(sep)
-                    break
+            end = _split_point(text, start, end, chunk_size)
         chunk = text[start:end].strip()
         if chunk:
             chunks.append(chunk)
