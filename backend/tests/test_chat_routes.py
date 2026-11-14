@@ -230,3 +230,40 @@ def test_an_earlier_blank_turn_does_not_block_a_real_question(monkeypatch):
     )
 
     assert response.status_code == 200
+
+
+def test_rag_without_a_collection_name_is_rejected():
+    # It used to answer from general knowledge with no sources, which reads
+    # the same as a grounded reply that found nothing.
+    response = client.post(
+        "/chat/",
+        json={"messages": [{"role": "user", "content": "hi"}], "use_rag": True},
+    )
+
+    assert response.status_code == 422
+
+
+def test_rag_with_a_blank_collection_name_is_rejected():
+    response = client.post(
+        "/chat/",
+        json={
+            "messages": [{"role": "user", "content": "hi"}],
+            "use_rag": True,
+            "collection_name": "   ",
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_not_asking_for_rag_needs_no_collection(monkeypatch):
+    from app.routers import chat
+
+    async def reply(messages, model=None):
+        return "ok"
+
+    monkeypatch.setattr(chat.ollama_service, "chat", reply)
+
+    response = client.post("/chat/", json={"messages": [{"role": "user", "content": "hi"}]})
+
+    assert response.status_code == 200

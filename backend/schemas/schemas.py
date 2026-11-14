@@ -34,6 +34,16 @@ class ChatRequest(BaseModel):
             raise ValueError("at least one user message must have content")
         return self
 
+    @model_validator(mode="after")
+    def _rag_needs_a_collection(self):
+        # Asking for RAG without naming a collection fell through to an
+        # ungrounded answer carrying no sources, which reads exactly like a
+        # grounded one that found nothing. A collection that does not exist
+        # is already a 404; not naming one at all should not be quieter.
+        if self.use_rag and not (self.collection_name or "").strip():
+            raise ValueError("use_rag needs a collection_name")
+        return self
+
 
 class ChatResponse(BaseModel):
     role: str = "assistant"
